@@ -80,4 +80,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+wp modify-posts q:post_type=iniciativa,post,publicacao q:post_status=draft,private,publish fn:ethos\\change_tag_to_category
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
 echo "Fim da execução dos comandos."
