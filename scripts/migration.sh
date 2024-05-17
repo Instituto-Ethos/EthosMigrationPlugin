@@ -86,4 +86,22 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+wp modify-posts q:post_type=iniciativa,post,publicacao q:post_status=draft,private,publish q:tax_query=post_tag:posicionamento-institucional fn:ethos\\set_posicionamento_institucional
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
+wp modify-posts q:post_type=iniciativa,post,publicacao q:post_status=draft,private,publish q:tax_query=post_tag:opinioes-e-analises fn:ethos\\set_opinioes_e_analises
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
+wp modify-posts q:post_type=iniciativa,post,publicacao q:post_status=draft,private,publish q:tax_query=categoria:noticias fn:ethos\\set_noticias
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
 echo "Fim da execução dos comandos."

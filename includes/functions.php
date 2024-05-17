@@ -68,9 +68,67 @@ function change_tag_to_category( $post ) {
 
                 if ( false !== $pos ) {
                     unset( $post_tags[$pos] );
-                    wp_set_post_terms( $post->ID, $post_tags, 'post_tag' );
+                    wp_set_post_terms( $post->ID, $post_tags, 'post_tag', true );
                 }
             }
+        }
+    }
+}
+
+/**
+ * Altera tag 'posicionamento-institucional' para tipo_post no post
+ */
+function set_posicionamento_institucional( $post ) {
+    $tag = 'posicionamento-institucional';
+    if ( has_term( $tag, 'post_tag', $post->ID ) ) {
+        $get_tipo_post = get_term_by( 'slug', $tag, 'tipo_post' );
+
+        if ( $get_tipo_post ) {
+            wp_set_post_terms( $post->ID, $get_tipo_post->term_id, 'tipo_post', true );
+
+            $post_tags = wp_get_post_terms( $post->ID, 'post_tag', ['fields'=>'names'] );
+            $pos = array_search( $tag, $post_tags );
+
+            if ( false !== $pos ) {
+                unset( $post_tags[$pos] );
+                wp_set_post_terms( $post->ID, $post_tags, 'post_tag', true );
+            }
+        }
+    }
+}
+
+/**
+ * Altera tag 'opinioes-e-analises' para tipo_post no post
+ */
+function set_opinioes_e_analises( $post ) {
+    $tag = 'opinioes-e-analises';
+    if ( has_term( $tag, 'post_tag', $post->ID ) ) {
+        $get_tipo_post = get_term_by( 'slug', $tag, 'tipo_post' );
+
+        if ( $get_tipo_post ) {
+            wp_set_post_terms( $post->ID, $get_tipo_post->term_id, 'tipo_post', true );
+
+            $post_tags = wp_get_post_terms( $post->ID, 'post_tag', ['fields'=>'names'] );
+            $pos = array_search( $tag, $post_tags );
+
+            if ( false !== $pos ) {
+                unset( $post_tags[$pos] );
+                wp_set_post_terms( $post->ID, $post_tags, 'post_tag', true );
+            }
+        }
+    }
+}
+
+/**
+ * Define tipo_post 'noticias' nos posts com a categoria 'noticias'
+ */
+function set_noticias( $post ) {
+    $categoria = 'noticias';
+    if ( has_term( $categoria, 'categoria', $post->ID ) ) {
+        $get_tipo_post = get_term_by( 'slug', $categoria, 'tipo_post' );
+
+        if ( $get_tipo_post ) {
+            wp_set_post_terms( $post->ID, $get_tipo_post->term_id, 'tipo_post', true );
         }
     }
 }
