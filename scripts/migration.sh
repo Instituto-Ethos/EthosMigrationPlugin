@@ -20,6 +20,12 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+wp modify-posts q:post_type=cedoc q:post_status=draft,private,publish q:tax_query=categoria:podcast fn:ethos\\set_post_type_post
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
 wp modify-posts q:post_type=cedoc q:post_status=draft,private,publish q:tax_query=categoria:publicacoes fn:ethos\\set_post_type_publicacao
 if [ $? -ne 0 ]; then
     echo "Erro ao executar o comando."
@@ -27,6 +33,12 @@ if [ $? -ne 0 ]; then
 fi
 
 wp modify-posts q:post_type=cedoc q:post_status=draft,private,publish q:tax_query=categoria:releases fn:ethos\\set_post_type_post
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
+wp modify-posts q:post_type=cedoc q:post_status=draft,private,publish q:tax_query=categoria:videos fn:ethos\\set_post_type_post
 if [ $? -ne 0 ]; then
     echo "Erro ao executar o comando."
     exit 1

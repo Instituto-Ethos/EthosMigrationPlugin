@@ -19,6 +19,19 @@ function set_post_type_publicacao( $post ) {
  * Altera post type para 'post'
  */
 function set_post_type_post( $post ) {
+
+    if ( has_term( 'noticias', 'categoria', $post->ID ) ) {
+        $get_tipo_post = '';
+        $get_tipo_post = get_term_by( 'slug', 'noticias', 'tipo_post' );
+        wp_set_post_terms( $post->ID, $get_tipo_post->term_id, 'tipo_post', true );
+    }
+
+    if ( has_term( 'releases', 'categoria', $post->ID ) ) {
+        $get_tipo_post = '';
+        $get_tipo_post = get_term_by( 'slug', 'releases', 'tipo_post' );
+        wp_set_post_terms( $post->ID, $get_tipo_post->term_id, 'tipo_post', true );
+    }
+
     $post->post_type = 'post';
     clean_post_cache( $post->ID );
 }
