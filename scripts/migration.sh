@@ -8,7 +8,7 @@ fi
 
 echo "Executando comandos WP-CLI..."
 
-wp modify-posts q:post_type=cedoc q:post_status=draft,private,publish q:post_status=draft q:tax_query=categoria:documentos fn:ethos\\set_post_type_publicacao
+wp modify-posts q:post_type=cedoc q:post_status=draft,private,publish q:tax_query=categoria:documentos fn:ethos\\set_post_type_publicacao
 if [ $? -ne 0 ]; then
     echo "Erro ao executar o comando."
     exit 1
