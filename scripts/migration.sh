@@ -62,6 +62,12 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+wp modify-posts q:post_type=conteudo q:post_status=draft,private,publish q:tax_query=category:iniciativas fn:ethos\\set_post_type_iniciativa
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
 wp modify-posts q:post_type=conteudo q:post_status=draft,private,publish q:tax_query="category:o-instituto-ethos;post_tag:posicionamento-institucional" fn:ethos\\set_post_type_post
 if [ $? -ne 0 ]; then
     echo "Erro ao executar o comando."
@@ -111,6 +117,18 @@ if [ $? -ne 0 ]; then
 fi
 
 wp modify-posts q:post_type=iniciativa,post,publicacao q:post_status=draft,private,publish q:tax_query=categoria:noticias fn:ethos\\set_noticias
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
+wp modify-posts q:post_type=post q:post_status=draft,private,publish q:tax_query=categoria:noticias fn:ethos\\set_post_type_post
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
+wp modify-posts q:post_type=post q:post_status=draft,private,publish q:tax_query=categoria:releases fn:ethos\\set_post_type_post
 if [ $? -ne 0 ]; then
     echo "Erro ao executar o comando."
     exit 1
