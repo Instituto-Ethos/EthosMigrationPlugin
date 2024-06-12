@@ -150,90 +150,100 @@ function set_events_only_date( $post ) {
     $date = get_post_meta( $post->ID, 'data-do-evento', true );
 
     if ( is_valid_date_format( $date ) ) {
-        create_events_from_cedoc( $post );
+        create_events_from_cedoc( $post, 'ethos\\factory_date' );
     }
 }
 
-function create_events_from_cedoc( $post ) {
+function set_events_date_time( $post ) {
+    create_events_from_cedoc( $post, 'ethos\\factory_date_time' );
+}
+
+function create_events_from_cedoc( $post, $fn ) {
 
     if ( ! is_event_created( $post->ID ) ) {
-        $dates      = factory_dates( $post );
-        $start_date = \DateTime::createFromFormat( 'Y-m-d H:i:s', $dates['EventStartDate'] );
-        $end_date   = \DateTime::createFromFormat( 'Y-m-d H:i:s', $dates['EventEndDate'] );
+        $dates = $fn( $post );
 
-        $args = [
-            'EventAllDay'             => 'yes',
-            'EventCurrencyCode'       => 'BRL',
-            'EventCurrencyPosition'   => 'prefix',
-            'EventCurrencySymbol'     => 'R$',
-            'EventDateTimeSeparator'  => ' @ ',
-            'EventEndDate'            => $end_date->format( 'Y-m-d' ),
-            'EventEndHour'            => $end_date->format( 'h' ),
-            'EventEndMeridian'        => $end_date->format( 'a' ),
-            'EventEndMinute'          => $end_date->format( 'i' ),
-            'EventStartDate'          => $start_date->format( 'Y-m-d' ),
-            'EventStartHour'          => $start_date->format( 'h' ),
-            'EventStartMeridian'      => $start_date->format( 'a' ),
-            'EventStartMinute'        => $start_date->format( 'i' ),
-            'EventTimeRangeSeparator' => ' - ',
-            'EventTimezone'           => 'UTC-3',
-            'EventURL'                => get_post_meta( $post->ID, 'inscricoes', true ),
-            'menu_order'              => '-1',
-            'post_author'             => $post->post_author,
-            'post_category'           => $post->post_category,
-            'post_content_filtered'   => $post->post_content_filtered,
-            'post_content'            => $post->post_content,
-            'post_date_gmt'           => $post->post_date_gmt,
-            'post_date'               => $post->post_date,
-            'post_excerpt'            => $post->post_excerpt,
-            'post_modified_gmt'       => $post->post_modified_gmt,
-            'post_modified'           => $post->post_modified,
-            'post_name'               => $post->post_name,
-            'post_parent'             => $post->post_parent,
-            'post_status'             => $post->post_status,
-            'post_title'              => $post->post_title,
-            'post_type'               => \Tribe__Events__Main::POSTTYPE
-        ];
+        if ( is_array( $dates ) ) {
+            $start_date = \DateTime::createFromFormat( 'Y-m-d H:i:s', $dates['EventStartDate'] );
+            $end_date   = \DateTime::createFromFormat( 'Y-m-d H:i:s', $dates['EventEndDate'] );
 
-        $event_id = \Tribe__Events__API::createEvent( $args );
+            if ( $start_date && $end_date ) {
+                $args = [
+                    'EventAllDay'             => 'yes',
+                    'EventCurrencyCode'       => 'BRL',
+                    'EventCurrencyPosition'   => 'prefix',
+                    'EventCurrencySymbol'     => 'R$',
+                    'EventDateTimeSeparator'  => ' @ ',
+                    'EventEndDate'            => $end_date->format( 'Y-m-d' ),
+                    'EventEndHour'            => $end_date->format( 'h' ),
+                    'EventEndMeridian'        => $end_date->format( 'a' ),
+                    'EventEndMinute'          => $end_date->format( 'i' ),
+                    'EventStartDate'          => $start_date->format( 'Y-m-d' ),
+                    'EventStartHour'          => $start_date->format( 'h' ),
+                    'EventStartMeridian'      => $start_date->format( 'a' ),
+                    'EventStartMinute'        => $start_date->format( 'i' ),
+                    'EventTimeRangeSeparator' => ' - ',
+                    'EventTimezone'           => 'UTC-3',
+                    'EventURL'                => get_post_meta( $post->ID, 'inscricoes', true ),
+                    'menu_order'              => '-1',
+                    'post_author'             => $post->post_author,
+                    'post_category'           => $post->post_category,
+                    'post_content_filtered'   => $post->post_content_filtered,
+                    'post_content'            => $post->post_content,
+                    'post_date_gmt'           => $post->post_date_gmt,
+                    'post_date'               => $post->post_date,
+                    'post_excerpt'            => $post->post_excerpt,
+                    'post_modified_gmt'       => $post->post_modified_gmt,
+                    'post_modified'           => $post->post_modified,
+                    'post_name'               => $post->post_name,
+                    'post_parent'             => $post->post_parent,
+                    'post_status'             => $post->post_status,
+                    'post_title'              => $post->post_title,
+                    'post_type'               => \Tribe__Events__Main::POSTTYPE
+                ];
 
-        if ( $event_id ) {
-            add_post_meta( $post->ID, 'ethos_migration_tribe_events_id', $event_id );
-            add_post_meta( $event_id, 'ethos_migration_cedoc_id', $post->ID );
-            add_post_meta( $event_id, 'ethos_migration_postmeta_raw', get_post_meta( $post->ID ) );
+                $event_id = \Tribe__Events__API::createEvent( $args );
 
-            $meta_keys = [
-                'curso',
-                'data_mysql',
-                'data-do-evento',
-                'horario',
-                'informacoes_complementares',
-                'inscricoes',
-                'local',
-                'post_views_count',
-                'projetos_relacionados',
-                'projetos',
-                'publicacoes_relacionadas',
-                'saiba_mais',
-                'temas'
-            ];
+                if ( $event_id ) {
+                    update_post_meta( $post->ID, 'ethos_migration_tribe_events_id', $event_id );
+                    update_post_meta( $event_id, 'ethos_migration_cedoc_id', $post->ID );
+                    update_post_meta( $event_id, 'ethos_migration_postmeta_raw', get_post_meta( $post->ID ) );
 
-            foreach ( $meta_keys as $meta_key ) {
-                $meta_value = get_post_meta( $post->ID, $meta_key, true );
-                add_post_meta( $event_id, $meta_key, $meta_value );
+                    $meta_keys = [
+                        'curso',
+                        'data_mysql',
+                        'data-do-evento',
+                        'horario',
+                        'informacoes_complementares',
+                        'inscricoes',
+                        'local',
+                        'post_views_count',
+                        'projetos_relacionados',
+                        'projetos',
+                        'publicacoes_relacionadas',
+                        'saiba_mais',
+                        'temas'
+                    ];
+
+                    foreach ( $meta_keys as $meta_key ) {
+                        $meta_value = get_post_meta( $post->ID, $meta_key, true );
+                        update_post_meta( $event_id, $meta_key, $meta_value );
+                    }
+                } else {
+                    echo "\n";
+                    \WP_CLI::error( "Erro ao tentar criar evento a partir do post ID $post->ID\n", false );
+                }
             }
         } else {
-            echo "\n";
-            \WP_CLI::error( "Erro ao tentar criar evento a partir do post ID $post->ID\n", false );
+            print_r( $dates );
         }
-
     } else {
         echo "\n";
         \WP_CLI::warning( "Já existe um evento criado para o Cedoc ID $post->ID\n" );
     }
 }
 
-function factory_dates( $post ) {
+function factory_date( $post ) {
     $date = get_post_meta( $post->ID, 'data-do-evento', true );
 
     $start_date = convert_date_to_allday_tec( $date, '00:00:00' );
@@ -250,11 +260,167 @@ function factory_dates( $post ) {
     ];
 }
 
-/**
- * @todo: Make function to convert dates and times
- */
-function factory_dates_and_times( $post ) {
+function factory_date_time( $post ) {
+    $date = get_post_meta( $post->ID, 'data-do-evento', true );
+    $time = get_post_meta( $post->ID, 'horario', true );
+
+    if ( $time ) {
+        $format_time = format_time( $time );
+        $start_time  = false;
+        $end_time    = false;
+
+        if ( isset( $format_time['error'] ) ) {
+            $format_error = $format_time['time'];
+
+            $all_day = [
+                'Dia inteiro',
+                'Dia todo',
+                'Programação diária'
+            ];
+
+            if ( in_array( $format_error, $all_day ) ) {
+                $start_time = '00:00:00';
+                $end_time = '23:59:59';
+            } else {
+                echo "\nErro ao tentar formatar o horário: $format_error\n";
+                update_post_meta( $post->ID, 'ethos_migration_format_error', $format_error );
+            }
+        } else {
+            if ( is_valid_time_format( $format_time['start_date'] ) ) {
+                $start_time = $format_time['start_date'];
+            } else {
+                echo "\nErro ao tentar formatar o horário `start_time`\n";
+                update_post_meta( $post->ID, 'ethos_migration_format_error', 'start_time não existe ou é inválido' );
+            }
+
+            if ( is_valid_time_format( $format_time['end_date'] ) ) {
+                $end_time = $format_time['end_date'];
+            } else if ( $start_time ) {
+                $start_time_format = new \DateTime( $start_time );
+                $start_time_format->modify( '+1 hour' );
+                $end_time = $start_time_format->format( 'H:i:s' );
+            }
+        }
+
+        $start_date = convert_date_to_allday_tec( $date, $start_time );
+        $start_date_utc = convert_to_utc( $start_date );
+
+        $end_date = convert_date_to_allday_tec( $date, $end_time );
+        $end_date_utc = convert_to_utc( $end_date );
+
+        return [
+            'EventStartDate'    => $start_date,
+            'EventStartDateUTC' => $start_date_utc,
+            'EventEndDate'      => $end_date,
+            'EventEndDateUTC'   => $end_date_utc
+        ];
+    } else {
+        echo "\nEsse post não possui o metadado `horario` - ";
+        update_post_meta( $post->ID, 'ethos_migration_format_error', 'Post sem horário' );
+    }
+
     return false;
+}
+
+function log_not_migrated_events( $post ) {
+    $error = get_post_meta( $post->ID, 'ethos_migration_format_error', true );
+
+    if ( $error ) {
+        echo "\nPost não migrado: $post->ID, motivo: $error\n";
+    } else {
+        echo "\nPost não migrado: $post->ID\n";
+    }
+}
+
+function format_time( $time ) {
+    $original_time = $time;
+    $time = trim( $time );
+    $time = rtrim( $time, '.' );
+
+    // Helper function to format single time
+    $format_single_time = function( $time ) {
+        if ( preg_match('/^\d{1,2}h$/', $time ) ) {
+            return str_pad( str_replace( 'h', '', $time ), 2, '0', STR_PAD_LEFT ) . ":00:00";
+        }
+
+        if ( preg_match( '/^\d{1,2}[:h]\d{2}h?$/', $time ) ) {
+            $time = str_replace( 'h', ':', $time );
+            return str_pad( $time, 5, '0', STR_PAD_LEFT ) . ":00";
+        }
+
+        return false;
+    };
+
+    // Hora única
+    if ( $formatted_time = $format_single_time( $time ) ) {
+        $formatted_time = str_replace( '::', ':', $formatted_time );
+        return ['start_date' => $formatted_time, 'end_date' => ''];
+    }
+
+    // Intervalo de horas
+    if ( preg_match( '/^\d{1,2}[:h]?\d{0,2}h? (às|as|a|-) \d{1,2}[:h]?\d{0,2}h?$/i', $time ) ) {
+        $times = preg_split( '/ (às|as|a|-) /i', $time );
+        if ( count( $times ) == 2 ) {
+            $start_date = $format_single_time( trim( $times[0] ) );
+            $end_date = $format_single_time( trim( $times[1] ) );
+
+            $start_date = str_replace( '::', ':', $start_date );
+            $end_date = str_replace( '::', ':', $end_date );
+
+            if ( $start_date && $end_date ) {
+                return ['start_date' => $start_date, 'end_date' => $end_date];
+            }
+        }
+    }
+
+    // Intervalo de horas com prefixo 'das'.
+    if ( preg_match( '/^das \d{1,2}[:h]?\d{0,2}h? (às|as|a) \d{1,2}[:h]?\d{0,2}h?$/i', $time ) ) {
+        $time = preg_replace( '/(das | às| as| a)/i', '', $time );
+        $times = preg_split( '/ /', $time );
+        if ( count( $times ) == 2 ) {
+            $start_date = $format_single_time( trim( $times[0] ) );
+            $end_date   = $format_single_time( trim( $times[1] ) );
+
+            $start_date = str_replace( '::', ':', $start_date );
+            $end_date = str_replace( '::', ':', $end_date );
+
+            if ( $start_date && $end_date ) {
+                return array(
+                    'start_date' => $start_date,
+                    'end_date'   => $end_date,
+                );
+            }
+        }
+    }
+
+    // Intervalo de horas com prefixo 'das' e descrição adicional.
+    if ( preg_match( '/^das \d{1,2}[:h]?\d{0,2}h? (às|as|a) \d{1,2}[:h]?\d{0,2}h?:.*$/i', $time ) ) {
+        $parts       = explode( ':', $time, 2 );
+        $time        = $parts[0];
+        $description = $parts[1];
+        $time        = preg_replace( '/(das | às| as| a)/i', '', $time );
+        $times       = preg_split( '/ /', $time );
+
+        if ( count( $times ) === 2 ) {
+            $start_date = $format_single_time( trim( $times[0] ) );
+            $end_date   = $format_single_time( trim( $times[1] ) );
+
+            $start_date = str_replace( '::', ':', $start_date );
+            $end_date = str_replace( '::', ':', $end_date );
+
+            if ( $start_date && $end_date ) {
+                return array(
+                    'start_date'  => $start_date,
+                    'end_date'    => $end_date
+                );
+            }
+        }
+    }
+
+    return [
+        'error' => "Unknown pattern",
+        'time' => $original_time
+    ];
 }
 
 function convert_date_to_allday_tec( $date, $time ) {
@@ -281,6 +447,12 @@ function is_valid_date_format( $date_string ) {
     // "dd/mm/yyyy"
     $regex = '/^([0-2][0-9]|(3)[0-1])\/(0[1-9]|1[0-2])\/\d{4}$/';
     return preg_match($regex, $date_string) === 1;
+}
+
+function is_valid_time_format( $time_string ) {
+    // "H:i:s"
+    $regex = '/^([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/';
+    return preg_match( $regex, $time_string ) === 1;
 }
 
 function is_event_created( $post_id ) {
