@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Ethos Migration Plugin
  * Description:       Plugin to migrate post types, taxonomies and metadata on Ethos site.
- * Version:           0.0.6
+ * Version:           0.0.7
  * Requires at least: 5.2
  * Requires PHP:      7.4
  * Author:            Hacklab
