@@ -202,6 +202,12 @@ function create_events_from_cedoc( $post, $fn ) {
                     'post_type'               => \Tribe__Events__Main::POSTTYPE
                 ];
 
+                $venue_id = set_venue_by_post( $post );
+
+                if ( $venue_id ) {
+                    $args['EventVenueID'] = $venue_id;
+                }
+
                 $event_id = \Tribe__Events__API::createEvent( $args );
 
                 if ( $event_id ) {
@@ -229,13 +235,16 @@ function create_events_from_cedoc( $post, $fn ) {
                         $meta_value = get_post_meta( $post->ID, $meta_key, true );
                         update_post_meta( $event_id, $meta_key, $meta_value );
                     }
+
+                    assign_terms_to_event( $post->ID, $event_id, 'categoria' );
+                    assign_terms_to_event( $post->ID, $event_id, 'category' );
+                    assign_terms_to_event( $post->ID, $event_id, 'post_tag' );
+
                 } else {
                     echo "\n";
                     \WP_CLI::error( "Erro ao tentar criar evento a partir do post ID $post->ID\n", false );
                 }
             }
-        } else {
-            print_r( $dates );
         }
     } else {
         echo "\n";
@@ -258,6 +267,68 @@ function factory_date( $post ) {
         'EventEndDate'      => $end_date,
         'EventEndDateUTC'   => $end_date_utc
     ];
+}
+
+function assign_terms_to_event( $post_id, $event_id, $taxonomy ) {
+    $terms = wp_get_post_terms( $post_id, $taxonomy );
+
+    if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+        $term_ids = wp_list_pluck( $terms, 'term_id' );
+        wp_set_post_terms( $event_id, $term_ids, $taxonomy );
+    }
+}
+
+function set_venue_by_post( $post ) {
+
+    if ( ! function_exists( 'tribe_get_events' ) ) {
+        return false;
+    }
+
+    $venue_name = get_post_meta( $post->ID, 'local', true );
+
+    if ( $venue_name ) {
+        $venue_id = check_if_venue_exists( $venue_name );
+
+        if ( ! $venue_id ) {
+            $venue_args = [
+                'post_status' => 'publish',
+                'post_title'  => $venue_name,
+                'post_type'   => 'tribe_venue'
+            ];
+
+            $venue_id = \wp_insert_post( $venue_args );
+
+            if ( ! $venue_id || is_wp_error( $venue_id ) ) {
+                echo 'Erro ao criar o local: ' . $venue_name;
+                return false;
+            } else {
+                echo "\nLocal $venue_name criado\n";
+                return $venue_id;
+            }
+        } else {
+            echo "\nLocal $venue_name já existe\n";
+            return $venue_id;
+        }
+    }
+
+    return false;
+
+}
+
+function check_if_venue_exists( $venue_name ) {
+    $args = [
+        'post_type'   => 'tribe_venue',
+        'post_status' => 'publish',
+        'name'        => sanitize_title( $venue_name ),
+    ];
+
+    $existing_venues = get_posts( $args );
+
+    if ( ! empty( $existing_venues ) ) {
+        return $existing_venues[0]->ID;
+    }
+
+    return false;
 }
 
 function factory_date_time( $post ) {
