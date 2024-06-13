@@ -151,6 +151,9 @@ function set_events_only_date( $post ) {
 
     if ( is_valid_date_format( $date ) ) {
         create_events_from_cedoc( $post, 'ethos\\factory_date' );
+    } else {
+        $error_message = $date ? "Data inválida: $date" : 'Data inválida';
+        update_post_meta( $post->ID, 'ethos_migration_format_error', $error_message );
     }
 }
 
@@ -245,6 +248,8 @@ function create_events_from_cedoc( $post, $fn ) {
                     \WP_CLI::error( "Erro ao tentar criar evento a partir do post ID $post->ID\n", false );
                 }
             }
+        } else {
+            update_post_meta( $post->ID, 'ethos_migration_format_error', 'Post sem data' );
         }
     } else {
         echo "\n";
