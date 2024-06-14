@@ -219,6 +219,9 @@ function create_events_from_cedoc( $post, $fn ) {
                     update_post_meta( $event_id, 'ethos_migration_postmeta_raw', get_post_meta( $post->ID ) );
 
                     $meta_keys = [
+                        'arquivo_documento',
+                        'carga_horaria_total',
+                        'conteudos_relacionados',
                         'curso',
                         'data_mysql',
                         'data-do-evento',
@@ -231,6 +234,7 @@ function create_events_from_cedoc( $post, $fn ) {
                         'projetos',
                         'publicacoes_relacionadas',
                         'saiba_mais',
+                        'slideshare',
                         'temas'
                     ];
 
