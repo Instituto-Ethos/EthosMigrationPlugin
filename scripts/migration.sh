@@ -134,4 +134,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+wp modify-posts q:post_type=post q:post_status=draft,private,publish q:tax_query=category:sem-categoria fn:ethos\\remove_sem_categoria
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
 echo "Fim da execução dos comandos."

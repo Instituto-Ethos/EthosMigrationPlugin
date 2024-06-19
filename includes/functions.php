@@ -146,6 +146,25 @@ function set_noticias( $post ) {
     }
 }
 
+/**
+ * Remove o termo "sem-categoria" dos posts que possuem outro termo
+ */
+function remove_sem_categoria( $post ) {
+    $terms = get_the_terms( $post->ID, 'category' );
+
+    if ( $terms && ! is_wp_error( $terms ) ) {
+        if ( count( $terms ) > 1 ) {
+            foreach ( $terms as $term ) {
+                if ( $term->slug == 'sem-categoria' ) {
+                    echo "\n";
+                    echo "Removendo o termo '$term->slug' do post: '$post->ID' - ";
+                    wp_remove_object_terms( $post->ID, $term->term_id, 'category' );
+                }
+            }
+        }
+    }
+}
+
 function set_events_only_date( $post ) {
     $date = get_post_meta( $post->ID, 'data-do-evento', true );
 
