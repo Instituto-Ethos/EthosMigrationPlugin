@@ -180,6 +180,15 @@ function set_events_date_time( $post ) {
     create_events_from_cedoc( $post, 'ethos\\factory_date_time' );
 }
 
+function set_events_without_date( $post ) {
+    $date = get_post_meta( $post->ID, 'data-do-evento', true );
+    if ( ! $date ) {
+        echo "\n";
+        echo "Iniciando conversão do post $post->ID \n";        
+        create_events_from_cedoc( $post, 'ethos\\factory_fake_date_time' );
+    }
+}
+
 function create_events_from_cedoc( $post, $fn ) {
 
     if ( ! is_event_created( $post->ID ) ) {
@@ -224,6 +233,13 @@ function create_events_from_cedoc( $post, $fn ) {
                     'post_type'               => \Tribe__Events__Main::POSTTYPE
                 ];
 
+                $without_date = false;
+
+                if ( $start_date->format( 'Y-m-d H:i:s' ) < '1980-01-02 23:59:59' ) {
+                    $args['post_status'] = 'draft';
+                    $without_date = true;
+                }
+
                 $venue_id = set_venue_by_post( $post );
 
                 if ( $venue_id ) {
@@ -236,6 +252,10 @@ function create_events_from_cedoc( $post, $fn ) {
                     update_post_meta( $post->ID, 'ethos_migration_tribe_events_id', $event_id );
                     update_post_meta( $event_id, 'ethos_migration_cedoc_id', $post->ID );
                     update_post_meta( $event_id, 'ethos_migration_postmeta_raw', get_post_meta( $post->ID ) );
+
+                    if ( $without_date ) {
+                        update_post_meta( $event_id, 'ethos_migration_without_date', 1 );
+                    }
 
                     $meta_keys = [
                         'arquivo_documento',
@@ -419,6 +439,20 @@ function factory_date_time( $post ) {
     }
 
     return false;
+}
+
+function factory_fake_date_time() {
+    $start_date = '1980-01-01 00:00:00';
+    $end_date = '1980-01-02 23:59:59';
+    $start_date_utc = convert_to_utc( $start_date );
+    $end_date_utc = convert_to_utc( $end_date );
+
+    return [
+        'EventStartDate'    => $start_date,
+        'EventStartDateUTC' => $start_date_utc,
+        'EventEndDate'      => $end_date,
+        'EventEndDateUTC'   => $end_date_utc
+    ];
 }
 
 function log_not_migrated_events( $post ) {

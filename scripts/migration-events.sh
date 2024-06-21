@@ -20,6 +20,12 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+wp modify-posts q:post_type=cedoc q:post_status=draft,private,publish q:tax_query=categoria:agenda fn:ethos\\set_events_without_date
+if [ $? -ne 0 ]; then
+    echo "Erro ao executar o comando."
+    exit 1
+fi
+
 wp modify-posts q:post_type=cedoc q:post_status=draft,private,publish q:tax_query=categoria:agenda q:meta_query=ethos_migration_tribe_events_id::NOT+EXISTS fn:ethos\\log_not_migrated_events
 if [ $? -ne 0 ]; then
     echo "Erro ao executar o comando."
