@@ -77,7 +77,7 @@ function parse_account_into_post_meta( $entity ) {
     foreach ( $attributes as $key => $value ) {
         if ( is_object( $value ) ) {
             $post_meta['_ethos_crm:' . $key ] = json_encode( $value, JSON_FORCE_OBJECT );
-        } else {
+        } elseif ( ! empty( $value ) ) {
             $post_meta['_ethos_crm:' . $key ] = $value;
         }
     }
@@ -90,7 +90,35 @@ function parse_contact_into_user_meta( $entity ) {
     $attributes = $entity->Attributes;
     $formatted = $entity->FormattedValues;
 
-    return [];
+    /**
+     * _ethos_admin
+     * _pmpro_group
+     */
+
+    $user_meta = [
+        '_ethos_from_crm' => 1,
+        '_ethos_crm_contact_id' => $entity_id,
+        '_pmpro_role' => $attributes['fut_bt_financeiro'] ? 'financial' : 'primary',
+
+        'nome_completo' => trim( $attributes['fullname'] ?? '' ),
+        'cpf' => str_replace( [ '.', '-' ], '', trim( $attributes['fut_st_cpf'] ?? '' ) ),
+        'cargo' => trim( $attributes['jobtitle'] ?? '' ),
+        'area' => trim( $formatted['fut_pl_area'] ?? '' ),
+        'email' => trim( $attributes['emailaddress1'] ?? '' ),
+        'celular' => str_replace( [ '(', ')', ' ', '-' ], '', $attributes['telephone1'] ?? '' ),
+        'celular_is_whatsapp' => '',
+        'telefone' => '',
+    ];
+
+    foreach ( $attributes as $key => $value ) {
+        if ( is_object( $value ) ) {
+            $user_meta['_ethos_crm:' . $key ] = json_encode( $value, JSON_FORCE_OBJECT );
+        } elseif ( ! empty( $value ) ) {
+            $user_meta['_ethos_crm:' . $key ] = $value;
+        }
+    }
+
+    return $user_meta;
 }
 
 function import_account( $entity, $force_update = false ) {
@@ -128,6 +156,42 @@ function import_account( $entity, $force_update = false ) {
 
     return $existing_posts[0]->ID;
 }
+
+function import_contact( $entity, $force_update = false ) {
+    $entity_id = $entity->Id;
+    $user_meta = parse_contact_into_user_meta( $entity );
+
+    $existing_users = get_users( [
+        'meta_query' => [
+            [ 'key' => '_ethos_crm_contact_id', 'value' => $entity_id ],
+        ],
+    ] );
+
+    if ( empty( $existing_users ) ) {
+        $password = wp_generate_password( 16 );
+
+        $user_id = wp_insert_user( [
+            'display_name' => $user_meta['nome_completo'],
+            'user_email' => $user_meta['email'],
+            'user_login' => sanitize_title( $user_meta['nome_completo'] ),
+            'user_pass' => $password,
+            'role' => 'subscriber',
+            'meta_input' => $user_meta,
+        ] );
+
+        return $user_id;
+    }
+
+    if ( $force_update ) {
+        wp_update_user( [
+            'ID' => $existing_users[0]->ID,
+            'display_name' => $user_meta['nome_completo'],
+            'user_email' => $user_meta['email'],
+            'meta_input' => $user_meta,
+        ] );
+    }
+
+    return $existing_users[0]->ID;
 }
 
 function import_accounts_command( $args, $assoc_args ) {
@@ -136,10 +200,6 @@ function import_accounts_command( $args, $assoc_args ) {
     ] );
 
     $should_update = $parsed_args['update'];
-
-    var_dump( $should_update );
-
-    return;
 
     $iterator = \hacklabr\iterate_crm_entities( 'account', [
         'orderby' => 'name',
@@ -151,14 +211,33 @@ function import_accounts_command( $args, $assoc_args ) {
     foreach( $iterator as $account ) {
         $meta = parse_account_into_post_meta( $account );
 
-        \WP_CLI::success( ( ++$i ) . "\t\t" . ( $meta['nome_fantasia'] ) );
+        \WP_CLI::success( ( ++$i ) . ' — ' . ( $meta['nome_fantasia'] ) );
 
         foreach ( $meta as $key => $value ) {
-            \WP_CLI::log( str_pad( $key, 40, ' ' ) . $value );
+            \WP_CLI::log( str_pad( $key, 60, ' ' ) . $value );
         }
     }
 
     \WP_CLI::success( 'Finished importing accounts from CRM' );
+
+    $iterator = \hacklabr\iterate_crm_entities( 'contact', [
+        'orderby' => 'fullname',
+        'order' => 'ASC',
+    ] );
+
+    $i = 0;
+
+    foreach( $iterator as $contact ) {
+        $meta = parse_contact_into_user_meta( $contact );
+
+        \WP_CLI::success( ( ++$i ) . ' — ' . ( $meta['nome_completo'] ) );
+
+        foreach ( $meta as $key => $value ) {
+            \WP_CLI::log( str_pad( $key, 60, ' ' ) . $value );
+        }
+    }
+
+    \WP_CLI::success( 'Finished importing contacts from CRM' );
 }
 
 function dont_notify_imported_users ( $send, $user ) {
