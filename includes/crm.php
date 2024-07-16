@@ -85,14 +85,22 @@ function parse_account_into_post_meta( $entity ) {
     return $post_meta;
 }
 
-function import_account( $entity ) {
+function parse_contact_into_user_meta( $entity ) {
+    $entity_id = $entity->Id;
+    $attributes = $entity->Attributes;
+    $formatted = $entity->FormattedValues;
+
+    return [];
+}
+
+function import_account( $entity, $force_update = false ) {
     $entity_id = $entity->Id;
     $post_meta = parse_account_into_post_meta( $entity );
 
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
         'meta_query' => [
-            [ '_ethos_crm_id' => $entity_id ],
+            [ '_ethos_crm_account_id' => $entity_id ],
         ],
     ] );
 
@@ -108,18 +116,31 @@ function import_account( $entity ) {
         // @TODO Set featured image
 
         return $post_id;
-    } else {
+    }
+
+    if ( $force_update ) {
         wp_update_post( [
             'ID' => $existing_posts[0]->ID,
             'post_title' => $post_meta['nome_fantasia'],
             'meta_input' => $post_meta,
         ] );
-
-        return $existing_posts[0]->ID;
     }
+
+    return $existing_posts[0]->ID;
+}
 }
 
-function import_accounts_command() {
+function import_accounts_command( $args, $assoc_args ) {
+    $parsed_args = wp_parse_args( $assoc_args, [
+        'update' => false,
+    ] );
+
+    $should_update = $parsed_args['update'];
+
+    var_dump( $should_update );
+
+    return;
+
     $iterator = \hacklabr\iterate_crm_entities( 'account', [
         'orderby' => 'name',
         'order' => 'ASC',
