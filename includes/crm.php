@@ -35,15 +35,23 @@ function parse_account_into_registration( $entity ) {
 
     $logradouro = trim( $attributes['fut_address1_logradouro'] ?? '' );
     if ( ! empty( $attributes['fut_lk_tipologradouro']?->Name ) ) {
-        $logradouro_prefix = trim( $attributes['fut_lk_tipologradouro']?->Name );
+        $logradouro_prefix = trim( $attributes['fut_lk_tipologradouro']->Name );
+
         if ( ! str_starts_with( strtolower( $logradouro ), strtolower( $logradouro_prefix ) ) ) {
             $logradouro = $logradouro_prefix . ' ' . $logradouro;
         }
     }
 
+    if ( ! empty( $attributes['originatingleadid']?->Id ) ) {
+        $lead_id = $attributes['originatingleadid']->Id;
+    } else {
+        $lead_id = null;
+    }
+
     $post_meta = [
         '_ethos_from_crm' => 1,
-        '_ethos_crm_id' => $entity_id,
+        '_ethos_crm_account_id' => $entity_id,
+        '_ethos_crm_lead_id' => $lead_id,
 
         'cnpj' => trim( $attributes['fut_st_cnpjsemmascara'] ?? '' ),
         'razao_social' => trim( $attributes['fut_st_razaosocial'] ?? '' ),
@@ -65,6 +73,14 @@ function parse_account_into_registration( $entity ) {
         'end_estado' => $formatted['fut_pl_estado'] ?? '',
         'end_cep' => str_replace( '-', '', trim( $attributes['address1_postalcode'] ?? '' ) ),
     ];
+
+    foreach ( $attributes as $key => $value ) {
+        if ( is_object( $value ) ) {
+            $post_meta['_ethos_crm:' . $key ] = json_encode( $value, JSON_FORCE_OBJECT );
+        } else {
+            $post_meta['_ethos_crm:' . $key ] = $value;
+        }
+    }
 
     return $post_meta;
 }
