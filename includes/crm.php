@@ -2,7 +2,7 @@
 
 namespace ethos;
 
-function parse_account_into_registration( $entity ) {
+function parse_account_into_post_meta( $entity ) {
     $entity_id = $entity->Id;
     $attributes = $entity->Attributes;
     $formatted = $entity->FormattedValues;
@@ -87,7 +87,7 @@ function parse_account_into_registration( $entity ) {
 
 function import_account( $entity ) {
     $entity_id = $entity->Id;
-    $post_meta = parse_account_into_registration( $entity );
+    $post_meta = parse_account_into_post_meta( $entity );
 
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
@@ -128,7 +128,7 @@ function import_accounts_command() {
     $i = 0;
 
     foreach( $iterator as $account ) {
-        $meta = parse_account_into_registration( $account );
+        $meta = parse_account_into_post_meta( $account );
 
         \WP_CLI::success( ( ++$i ) . "\t\t" . ( $meta['nome_fantasia'] ) );
 
