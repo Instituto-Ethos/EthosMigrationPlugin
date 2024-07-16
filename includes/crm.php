@@ -81,7 +81,7 @@ function import_account( $entity ) {
     ] );
 
     if ( empty( $existing_posts ) ) {
-        wp_insert_post( [
+        $post_id = wp_insert_post( [
             'post_type' => 'organizacao',
             'post_title' => $post_meta['nome_fantasia'],
             'post_content' => '',
@@ -90,12 +90,16 @@ function import_account( $entity ) {
         ] );
 
         // @TODO Set featured image
+
+        return $post_id;
     } else {
         wp_update_post( [
             'ID' => $existing_posts[0]->ID,
             'post_title' => $post_meta['nome_fantasia'],
             'meta_input' => $post_meta,
         ] );
+
+        return $existing_posts[0]->ID;
     }
 }
 
