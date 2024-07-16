@@ -21,3 +21,4 @@ define( 'ETHOS_MIGRATION_VERSION', '0.0.11' );
 define( 'ETHOS_MIGRATION_PATH', plugins_url( '/', __FILE__ ) );
 
 require_once( 'includes/functions.php' );
+require_once( 'includes/crm.php' );
