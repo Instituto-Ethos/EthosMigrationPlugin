@@ -189,24 +189,23 @@ function import_account( $entity, $force_update = false ) {
         ],
     ] );
 
-    $user_id = 0;
-    if ( empty( $existing_posts ) || $force_update ) {
-        $contact_id = $entity->Attributes['primarycontactid']?->Id ?? null;
-
-        if ( ! empty( $contact_id ) ) {
-            $user_id = get_contact( $contact_id ) ?? 0;
-        }
-    }
-
     if ( empty( $existing_posts ) ) {
         $post_id = wp_insert_post( [
             'post_type' => 'organizacao',
-            'post_author' => $user_id,
             'post_title' => $post_meta['nome_fantasia'],
             'post_content' => '',
             'post_status' => 'publish',
             'meta_input' => $post_meta,
         ] );
+
+        // Update author after post creation to avoid infinite loop
+        if ( empty( $existing_posts ) || $force_update ) {
+            $contact_id = $entity->Attributes['primarycontactid']?->Id ?? null;
+
+            if ( ! empty( $contact_id ) ) {
+                set_main_contact( $post_id, $contact_id );
+            }
+        }
 
         // @TODO Set featured image
 
@@ -216,7 +215,6 @@ function import_account( $entity, $force_update = false ) {
     if ( $force_update ) {
         wp_update_post( [
             'ID' => $existing_posts[0]->ID,
-            'post_author' => $user_id,
             'post_title' => $post_meta['nome_fantasia'],
             'meta_input' => $post_meta,
         ] );
@@ -243,6 +241,15 @@ function get_contact( $entity_id ) {
     }
 
     return null;
+}
+
+function set_main_contact( $post_id, $contact_id ) {
+    $user_id = get_contact( $contact_id ) ?? 0;
+
+    wp_update_post([
+        'ID' => $post_id,
+        'post_author' => $user_id,
+    ]);
 }
 
 function import_contact( $entity, $force_update = false ) {
