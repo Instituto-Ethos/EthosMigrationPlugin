@@ -419,6 +419,7 @@ function dont_notify_imported_users ( $send, $user ) {
 
     return $send;
 }
+add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\dont_notify_imported_users', 10, 2 );
 add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\dont_notify_imported_users', 10, 2 );
 
 function register_import_accounts_command() {
