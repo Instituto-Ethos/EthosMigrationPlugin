@@ -32,7 +32,7 @@ function get_pmpro_level_id ( $post_id, $level_name ) {
         return null;
     }
 
-    return \hacklabr\get_pmpro_level_options( $post_id )[ $level_slug ] ?? null;
+    return \hacklabr\Fields\get_pmpro_level_options( $post_id )[ $level_slug ] ?? null;
 }
 
 function sanitize_number( $string ) {
@@ -203,7 +203,7 @@ function import_account( $entity, $force_update = false ) {
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
         'meta_query' => [
-            [ '_ethos_crm_account_id' => $entity_id ],
+            [ 'key' => '_ethos_crm_account_id', 'value' => $entity_id ],
         ],
     ] );
 
