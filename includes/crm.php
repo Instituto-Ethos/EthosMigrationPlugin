@@ -151,10 +151,7 @@ function parse_contact_into_user_meta( $entity ) {
     return $user_meta;
 }
 
-function import_account( $entity, $force_update = false ) {
-    $entity_id = $entity->Id;
-    $post_meta = parse_account_into_post_meta( $entity );
-
+function get_account( $entity_id ) {
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
         'meta_query' => [
@@ -163,8 +160,48 @@ function import_account( $entity, $force_update = false ) {
     ] );
 
     if ( empty( $existing_posts ) ) {
+        $entity = \hacklabr\get_crm_entity_by_id( 'account', $entity_id );
+
+        if ( ! empty( $entity ) ) {
+            return import_account( $entity, false );
+        }
+    } else {
+        return $existing_posts[0]->ID;
+    }
+
+    return null;
+}
+
+function import_account( $entity, $force_update = false ) {
+    $entity_id = $entity->Id;
+    $post_meta = parse_account_into_post_meta( $entity );
+
+    if ( class_exists( '\WP_CLI' ) ) {
+        \WP_CLI::debug( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}" );
+    }
+
+    return null;
+
+    $existing_posts = get_posts( [
+        'post_type' => 'organizacao',
+        'meta_query' => [
+            [ '_ethos_crm_account_id' => $entity_id ],
+        ],
+    ] );
+
+    $user_id = 0;
+    if ( empty( $existing_posts ) || $force_update ) {
+        $contact_id = $entity->Attributes['primarycontactid']?->Id ?? null;
+
+        if ( ! empty( $contact_id ) ) {
+            $user_id = get_contact( $contact_id ) ?? 0;
+        }
+    }
+
+    if ( empty( $existing_posts ) ) {
         $post_id = wp_insert_post( [
             'post_type' => 'organizacao',
+            'post_author' => $user_id,
             'post_title' => $post_meta['nome_fantasia'],
             'post_content' => '',
             'post_status' => 'publish',
@@ -179,6 +216,7 @@ function import_account( $entity, $force_update = false ) {
     if ( $force_update ) {
         wp_update_post( [
             'ID' => $existing_posts[0]->ID,
+            'post_author' => $user_id,
             'post_title' => $post_meta['nome_fantasia'],
             'meta_input' => $post_meta,
         ] );
@@ -187,9 +225,35 @@ function import_account( $entity, $force_update = false ) {
     return $existing_posts[0]->ID;
 }
 
+function get_contact( $entity_id ) {
+    $existing_users = get_users( [
+        'meta_query' => [
+            [ 'key' => '_ethos_crm_contact_id', 'value' => $entity_id ],
+        ],
+    ] );
+
+    if ( empty( $existing_users ) ) {
+        $entity = \hacklabr\get_crm_entity_by_id( 'contact', $entity_id );
+
+        if ( ! empty( $entity ) ) {
+            return import_contact( $entity, false );
+        }
+    } else {
+        return $existing_users[0]->ID;
+    }
+
+    return null;
+}
+
 function import_contact( $entity, $force_update = false ) {
     $entity_id = $entity->Id;
     $user_meta = parse_contact_into_user_meta( $entity );
+
+    if ( class_exists( '\WP_CLI' ) ) {
+        \WP_CLI::debug( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}" );
+    }
+
+    return null;
 
     $existing_users = get_users( [
         'meta_query' => [
@@ -229,45 +293,35 @@ function import_accounts_command( $args, $assoc_args ) {
         'update' => false,
     ] );
 
-    $should_update = $parsed_args['update'];
+    $force_update = $parsed_args['update'];
 
-    $iterator = \hacklabr\iterate_crm_entities( 'account', [
+    $accounts = \hacklabr\iterate_crm_entities( 'account', [
         'orderby' => 'name',
         'order' => 'ASC',
     ] );
 
-    $i = 0;
+    $count = 0;
 
-    foreach( $iterator as $account ) {
-        $meta = parse_account_into_post_meta( $account );
-
-        \WP_CLI::success( ( ++$i ) . ' — ' . ( $meta['nome_fantasia'] ) );
-
-        foreach ( $meta as $key => $value ) {
-            \WP_CLI::log( str_pad( $key, 60, ' ' ) . $value );
-        }
+    foreach( $accounts as $account ) {
+        import_account( $account, $force_update );
+        $count++;
     }
 
-    \WP_CLI::success( 'Finished importing accounts from CRM' );
+    \WP_CLI::success( "Finished importing {$count} accounts." );
 
-    $iterator = \hacklabr\iterate_crm_entities( 'contact', [
+    $contacts = \hacklabr\iterate_crm_entities( 'contact', [
         'orderby' => 'fullname',
         'order' => 'ASC',
     ] );
 
-    $i = 0;
+    $count = 0;
 
-    foreach( $iterator as $contact ) {
-        $meta = parse_contact_into_user_meta( $contact );
-
-        \WP_CLI::success( ( ++$i ) . ' — ' . ( $meta['nome_completo'] ) );
-
-        foreach ( $meta as $key => $value ) {
-            \WP_CLI::log( str_pad( $key, 60, ' ' ) . $value );
-        }
+    foreach( $contacts as $contact ) {
+        import_contact( $contact, $force_update );
+        $count++;
     }
 
-    \WP_CLI::success( 'Finished importing contacts from CRM' );
+    \WP_CLI::success( "Finished importing {$count} contacts." );
 }
 
 function dont_notify_imported_users ( $send, $user ) {
