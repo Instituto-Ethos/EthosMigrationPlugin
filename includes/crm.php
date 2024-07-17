@@ -419,8 +419,10 @@ function dont_notify_imported_users ( $send, $user ) {
 
     return $send;
 }
-add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\dont_notify_imported_users', 10, 2 );
-add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\dont_notify_imported_users', 10, 2 );
+add_filter( 'pmpro_approvals_after_approve_member_send_emails', 'ethos\\dont_notify_imported_users', 20, 2 );
+add_filter( 'pmpro_wp_new_user_notification', 'ethos\\dont_notify_imported_users', 20, 2 );
+add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\dont_notify_imported_users', 20, 2 );
+add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\dont_notify_imported_users', 20, 2 );
 
 function register_import_accounts_command() {
     if ( class_exists( '\WP_CLI' ) ) {
