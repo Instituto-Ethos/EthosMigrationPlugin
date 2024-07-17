@@ -200,8 +200,6 @@ function import_account( $entity, $force_update = false ) {
         \WP_CLI::debug( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}" );
     }
 
-    return null;
-
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
         'meta_query' => [
@@ -224,6 +222,10 @@ function import_account( $entity, $force_update = false ) {
         }
 
         // @TODO Set featured image
+
+        if ( class_exists( '\WP_CLI' ) ) {
+            \WP_CLI::debug( "Created post with ID = {$post_id}" );
+        }
 
         return $post_id;
     }
@@ -267,8 +269,6 @@ function import_contact( $entity, $force_update = false ) {
         \WP_CLI::debug( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}" );
     }
 
-    return null;
-
     $existing_users = get_users( [
         'meta_query' => [
             [ 'key' => '_ethos_crm_contact_id', 'value' => $entity_id ],
@@ -289,6 +289,10 @@ function import_contact( $entity, $force_update = false ) {
 
         if ( ! empty( $entity->Attributes['parentcustomerid'] ) ) {
             add_contact_to_account( $user_id, $entity->Attributes['parentcustomerid']->Id );
+        }
+
+        if ( class_exists( '\WP_CLI' ) ) {
+            \WP_CLI::debug( "Created user with ID = {$user_id}" );
         }
 
         return $user_id;
