@@ -65,7 +65,7 @@ function parse_account_into_post_meta( $entity ) {
         }
     }
 
-    if ( ! empty( $attributes['originatingleadid']?->Id ) ) {
+    if ( ! empty( $attributes['originatingleadid'] ) ) {
         $lead_id = $attributes['originatingleadid']->Id;
     } else {
         $lead_id = null;
@@ -199,12 +199,8 @@ function import_account( $entity, $force_update = false ) {
         ] );
 
         // Update author after post creation to avoid infinite loop
-        if ( empty( $existing_posts ) || $force_update ) {
-            $contact_id = $entity->Attributes['primarycontactid']?->Id ?? null;
-
-            if ( ! empty( $contact_id ) ) {
-                set_main_contact( $post_id, $contact_id );
-            }
+        if ( ! empty( $entity->Attributes['primarycontactid'] ) ) {
+            set_main_contact( $post_id, $entity->Attributes['primarycontactid']->Id );
         }
 
         // @TODO Set featured image
@@ -243,15 +239,6 @@ function get_contact( $entity_id ) {
     return null;
 }
 
-function set_main_contact( $post_id, $contact_id ) {
-    $user_id = get_contact( $contact_id ) ?? 0;
-
-    wp_update_post([
-        'ID' => $post_id,
-        'post_author' => $user_id,
-    ]);
-}
-
 function import_contact( $entity, $force_update = false ) {
     $entity_id = $entity->Id;
     $user_meta = parse_contact_into_user_meta( $entity );
@@ -280,6 +267,10 @@ function import_contact( $entity, $force_update = false ) {
             'meta_input' => $user_meta,
         ] );
 
+        if ( ! empty( $entity->Attributes['parentcustomerid'] ) ) {
+            add_contact_to_account( $user_id, $entity->Attributes['parentcustomerid']->Id );
+        }
+
         return $user_id;
     }
 
@@ -293,6 +284,21 @@ function import_contact( $entity, $force_update = false ) {
     }
 
     return $existing_users[0]->ID;
+}
+
+function add_contact_to_account( $user_id, $account_id ) {
+    /*
+    $post_id = get_account( $account_id );
+    */
+}
+
+function set_main_contact( $post_id, $contact_id ) {
+    $user_id = get_contact( $contact_id ) ?? 0;
+
+    wp_update_post([
+        'ID' => $post_id,
+        'post_author' => $user_id,
+    ]);
 }
 
 function import_accounts_command( $args, $assoc_args ) {
