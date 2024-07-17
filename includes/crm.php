@@ -2,6 +2,22 @@
 
 namespace ethos;
 
+/**
+ * Better than calling `array_filter` than `array_unique` because the latter
+ * preserve keys
+ */
+function array_unique_values( $array ) {
+    $return = [];
+
+    foreach ( $array as $el ) {
+        if ( ! empty( $el ) && ! in_array( $el, $return ) ) {
+            $return[] = $el;
+        }
+    }
+
+    return $return;
+}
+
 function parse_account_into_post_meta( $entity ) {
     $entity_id = $entity->Id;
     $attributes = $entity->Attributes;
@@ -95,6 +111,13 @@ function parse_contact_into_user_meta( $entity ) {
      * _pmpro_group
      */
 
+    $phones = [
+        str_replace( [ '(', ')', ' ', '-', '.' ], '', $attributes['mobilephone'] ?? '' ),
+        str_replace( [ '(', ')', ' ', '-', '.' ], '', $attributes['telephone1'] ?? '' ),
+        str_replace( [ '(', ')', ' ', '-', '.' ], '', $attributes['telephone2'] ?? '' ),
+    ];
+    $phones = array_unique_values( $phones );
+
     $user_meta = [
         '_ethos_from_crm' => 1,
         '_ethos_crm_contact_id' => $entity_id,
@@ -105,9 +128,9 @@ function parse_contact_into_user_meta( $entity ) {
         'cargo' => trim( $attributes['jobtitle'] ?? '' ),
         'area' => trim( $formatted['fut_pl_area'] ?? '' ),
         'email' => trim( $attributes['emailaddress1'] ?? '' ),
-        'celular' => str_replace( [ '(', ')', ' ', '-' ], '', $attributes['telephone1'] ?? '' ),
+        'celular' => $phones[ 0 ] ?? '',
         'celular_is_whatsapp' => '',
-        'telefone' => '',
+        'telefone' => $phones[ 1 ] ?? '',
     ];
 
     foreach ( $attributes as $key => $value ) {
