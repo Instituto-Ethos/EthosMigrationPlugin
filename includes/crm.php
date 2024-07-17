@@ -18,6 +18,13 @@ function array_unique_values( $array ) {
     return $return;
 }
 
+function sanitize_number( $string ) {
+    if ( empty( $string ) ) {
+        return '';
+    }
+    return str_replace( [ '+', '-' ], '', filter_var( $string, FILTER_SANITIZE_NUMBER_INT ) );
+}
+
 function parse_account_into_post_meta( $entity ) {
     $entity_id = $entity->Id;
     $attributes = $entity->Attributes;
@@ -73,7 +80,7 @@ function parse_account_into_post_meta( $entity ) {
         'razao_social' => trim( $attributes['fut_st_razaosocial'] ?? '' ),
         'nome_fantasia' => trim( $attributes['name'] ?? '' ),
         'segmento' => trim( $attributes['fut_lk_setor']?->Name ?? '' ),
-        'cnae' => str_replace( [ '-', '/' ], '', $formatted['fut_lk_cnae'] ?? '' ),
+        'cnae' => sanitize_number( $formatted['fut_lk_cnae'] ?? '' ),
         'faturamento_anual' => $revenue,
         'inscricao_estadual' => trim( $attributes['fut_st_inscricaoestadual'] ?? '' ),
         'inscricao_municipal' => trim( $attributes['fut_st_inscricaomunicipal'] ?? '' ),
@@ -87,7 +94,7 @@ function parse_account_into_post_meta( $entity ) {
         'end_bairro' => trim( $attributes['address1_line3'] ?? '' ),
         'end_cidade' => trim( $attributes['address1_city'] ?? '' ),
         'end_estado' => $formatted['fut_pl_estado'] ?? '',
-        'end_cep' => str_replace( '-', '', trim( $attributes['address1_postalcode'] ?? '' ) ),
+        'end_cep' => sanitize_number( $attributes['address1_postalcode'] ?? '' ),
     ];
 
     foreach ( $attributes as $key => $value ) {
@@ -112,9 +119,9 @@ function parse_contact_into_user_meta( $entity ) {
      */
 
     $phones = [
-        str_replace( [ '(', ')', ' ', '-', '.' ], '', $attributes['mobilephone'] ?? '' ),
-        str_replace( [ '(', ')', ' ', '-', '.' ], '', $attributes['telephone1'] ?? '' ),
-        str_replace( [ '(', ')', ' ', '-', '.' ], '', $attributes['telephone2'] ?? '' ),
+        sanitize_number( $attributes['mobilephone'] ?? '' ),
+        sanitize_number( $attributes['telephone1'] ?? '' ),
+        sanitize_number( $attributes['telephone2'] ?? '' ),
     ];
     $phones = array_unique_values( $phones );
 
@@ -124,7 +131,7 @@ function parse_contact_into_user_meta( $entity ) {
         '_pmpro_role' => $attributes['fut_bt_financeiro'] ? 'financial' : 'primary',
 
         'nome_completo' => trim( $attributes['fullname'] ?? '' ),
-        'cpf' => str_replace( [ '.', '-' ], '', trim( $attributes['fut_st_cpf'] ?? '' ) ),
+        'cpf' => sanitize_number( $attributes['fut_st_cpf'] ?? '' ),
         'cargo' => trim( $attributes['jobtitle'] ?? '' ),
         'area' => trim( $formatted['fut_pl_area'] ?? '' ),
         'email' => trim( $attributes['emailaddress1'] ?? '' ),
