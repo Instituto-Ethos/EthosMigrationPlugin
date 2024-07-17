@@ -306,6 +306,10 @@ function import_contact( $entity, $force_update = false ) {
     return $existing_users[0]->ID;
 }
 
+function approve_contact( $user_id, $level_id ) {
+    return \PMPro_Approvals::approveMember( $user_id, $level_id, true );
+}
+
 function add_contact_to_account( $user_id, $account_id ) {
     $existing_group_id = get_user_meta( $user_id, '_pmpro_group', true );
     if ( ! empty( $existing_group_id ) ) {
@@ -317,10 +321,19 @@ function add_contact_to_account( $user_id, $account_id ) {
     $group_id = (int) ( get_post_meta( $post_id, '_pmpro_group', true ) ?? 0 );
 
     if ( ! empty( $group_id ) ) {
-        \hacklabr\add_user_to_pmpro_group( $user_id, $group_id );
+        $membership = \hacklabr\add_user_to_pmpro_group( $user_id, $group_id );
+
+        wp_update_user([
+            'ID' => $user_id,
+            'meta_input' => [
+                '_pmpro_group' => $group_id,
+            ],
+        ]);
+
+        approve_contact( $group_id, $membership->group_child_level_id );
     }
 
-    return $group_id ?? null;
+    return $group_id ?: null;
 }
 
 function set_main_contact( $post_id, $contact_id, $level_name ) {
@@ -351,6 +364,8 @@ function set_main_contact( $post_id, $contact_id, $level_name ) {
             '_pmpro_group' => $group->id,
         ],
     ]);
+
+    approve_contact( $user_id, $level_id );
 
     return $group->id;
 }
