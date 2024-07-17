@@ -18,6 +18,23 @@ function array_unique_values( $array ) {
     return $return;
 }
 
+function get_pmpro_level_id ( $post_id, $level_name ) {
+    $level_slugs = [
+        'Conexão' => 'conexao',
+        'Essencial' => 'essencial',
+        'Institucional' => 'institucional',
+        'Vivência' => 'vivencia',
+    ];
+
+    $level_slug = $level_slugs[ $level_name ] ?? null;
+
+    if ( empty( $level_slug ) ) {
+        return null;
+    }
+
+    return \hacklabr\get_pmpro_level_options( $post_id )[ $level_slug ] ?? null;
+}
+
 function sanitize_number( $string ) {
     if ( empty( $string ) ) {
         return '';
@@ -174,6 +191,9 @@ function get_account( $entity_id ) {
 
 function import_account( $entity, $force_update = false ) {
     $entity_id = $entity->Id;
+    $attributes = $entity->Attributes;
+    $formatted = $entity->FormattedValues;
+
     $post_meta = parse_account_into_post_meta( $entity );
 
     if ( class_exists( '\WP_CLI' ) ) {
@@ -199,8 +219,8 @@ function import_account( $entity, $force_update = false ) {
         ] );
 
         // Update author after post creation to avoid infinite loop
-        if ( ! empty( $entity->Attributes['primarycontactid'] ) ) {
-            set_main_contact( $post_id, $entity->Attributes['primarycontactid']->Id );
+        if ( ! empty( $attributes['primarycontactid'] ) && ! empty( $formatted['fut_pl_tipo_associacao'] ) ) {
+            set_main_contact( $post_id, $attributes['primarycontactid']->Id, $formatted['fut_pl_tipo_associacao'] );
         }
 
         // @TODO Set featured image
@@ -287,18 +307,52 @@ function import_contact( $entity, $force_update = false ) {
 }
 
 function add_contact_to_account( $user_id, $account_id ) {
-    /*
+    $existing_group_id = get_user_meta( $user_id, '_pmpro_group', true );
+    if ( ! empty( $existing_group_id ) ) {
+        return (int) $existing_group_id;
+    }
+
     $post_id = get_account( $account_id );
-    */
+
+    $group_id = (int) ( get_post_meta( $post_id, '_pmpro_group', true ) ?? 0 );
+
+    if ( ! empty( $group_id ) ) {
+        \hacklabr\add_user_to_pmpro_group( $user_id, $group_id );
+    }
+
+    return $group_id ?? null;
 }
 
-function set_main_contact( $post_id, $contact_id ) {
+function set_main_contact( $post_id, $contact_id, $level_name ) {
+    $existing_group_id = get_post_meta( $post_id, '_pmpro_group', true );
+    if ( ! empty( $existing_group_id ) ) {
+        return (int) $existing_group_id;
+    }
+
     $user_id = get_contact( $contact_id ) ?? 0;
+
+    $level_id = get_pmpro_level_id( $post_id, $level_name );
+
+    $group = \hacklabr\create_pmpro_group( $user_id, $level_id );
+
+    wp_update_user([
+        'ID' => $user_id,
+        'meta_input' => [
+            '_ethos_admin' => '1',
+            '_pmpro_group' => $group->id,
+            '_pmpro_role' => 'primary',
+        ],
+    ]);
 
     wp_update_post([
         'ID' => $post_id,
         'post_author' => $user_id,
+        'meta_input' => [
+            '_pmpro_group' => $group->id,
+        ],
     ]);
+
+    return $group->id;
 }
 
 function import_accounts_command( $args, $assoc_args ) {
