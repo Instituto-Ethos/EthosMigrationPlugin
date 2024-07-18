@@ -115,7 +115,7 @@ function is_active_contact( $contact ) {
 }
 
 function is_parent_company( $account ) {
-    return ( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169;
+    return strlen( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169;
 }
 
 function is_subsidiary_company( $account ) {
