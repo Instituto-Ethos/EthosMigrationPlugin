@@ -42,6 +42,14 @@ function sanitize_number( $string ) {
     return str_replace( [ '+', '-' ], '', filter_var( $string, FILTER_SANITIZE_NUMBER_INT ) );
 }
 
+function is_parent_company( $account ) {
+    return ( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169;
+}
+
+function is_subsidiary_company( $account ) {
+    return $account->Attributes['fut_bt_pertencegrupo'] ?? false;
+}
+
 function parse_account_into_post_meta( $entity ) {
     $entity_id = $entity->Id;
     $attributes = $entity->Attributes;
@@ -194,6 +202,10 @@ function import_account( $entity, $force_update = false ) {
     $attributes = $entity->Attributes;
     $formatted = $entity->FormattedValues;
 
+    if ( is_parent_company( $entity ) || is_subsidiary_company( $entity ) ) {
+        return null;
+    }
+
     $post_meta = parse_account_into_post_meta( $entity );
 
     if ( class_exists( '\WP_CLI' ) ) {
@@ -295,7 +307,10 @@ function import_contact( $entity, $force_update = false ) {
 
         if ( ! empty( $attributes['parentcustomerid'] ) ) {
             $post_id = get_account( $attributes['parentcustomerid']->Id );
-            add_contact_to_organization( $user_id, $post_id );
+
+            if ( ! empty( $post_id ) ) {
+                add_contact_to_organization( $user_id, $post_id );
+            }
         }
 
         if ( class_exists( '\WP_CLI' ) ) {
@@ -393,7 +408,7 @@ function count_economic_groups_command() {
     $count = 0;
 
     foreach( $accounts as $account ) {
-        if ( strlen( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169 ) {
+        if ( is_economic_group( $account ) ) {
             \WP_CLI::success( "Found group {$account->Attributes['name']} ({$account->Id})." );
             $count++;
         }
