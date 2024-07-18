@@ -24,7 +24,7 @@ function array_unique_values( array $array ) {
  * @param string $message The message to be printed
  * @param string $level One of 'debug', 'error', 'log', 'success' or 'warning'
  */
-function cli_log ( string $message, string $level = 'log' ) {
+function cli_log( string $message, string $level = 'log' ) {
     if ( class_exists( '\WP_CLI' ) ) {
         call_user_func( [ \WP_CLI::class, $level ], $message );
     }
@@ -50,7 +50,7 @@ function generate_unique_user_login( $user_name ) {
     }
 }
 
-function get_pmpro_level_id ( $post_id, $level_name ) {
+function get_pmpro_level_id( $post_id, $level_name ) {
     $level_slugs = [
         'Conexão' => 'conexao',
         'Essencial' => 'essencial',
@@ -74,6 +74,32 @@ function sanitize_number( $string ) {
     return str_replace( [ '+', '-' ], '', filter_var( $string, FILTER_SANITIZE_NUMBER_INT ) );
 }
 
+function cache_crm_entity( $entity ) {
+    global $ethos_crm_cache;
+
+    if ( empty( $ethos_crm_cache ) ) {
+        $ethos_crm_cache = [];
+    } else if ( empty( $ethos_crm_cache[ $entity->LogicalName ] ) ) {
+        $ethos_crm_cache[ $entity->LogicalName ] = [];
+    }
+
+    $ethos_crm_cache[ $entity->LogicalName ][ $entity->Id ] = $entity;
+    return $entity;
+}
+
+function fetch_crm_entity( $entity_type, $entity_id ) {
+    global $ethos_crm_cache;
+
+    $cached_value = $ethos_crm_cache[ $entity_type ][ $entity_id ] ?? null;
+
+    if ( ! empty( $cached_value ) ) {
+        return $cached_value;
+    }
+
+    $entity = \hacklabr\get_crm_entity_by_id( $entity_type, $entity_id );
+    return cache_crm_entity( $entity );
+}
+
 function is_active_account( $account ) {
     $account_status = $account->FormattedValues['fut_pl_associacao'] ?? '';
     return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
@@ -84,7 +110,7 @@ function is_active_contact( $contact ) {
     if ( empty( $account_id ) ) {
         return false;
     }
-    $account = \hacklabr\get_crm_entity_by_id( 'account', $account_id );
+    $account = fetch_crm_entity( 'account', $account_id );
     return is_active_account( $account );
 }
 
@@ -231,7 +257,7 @@ function get_account( $entity_id ) {
     ] );
 
     if ( empty( $existing_posts ) ) {
-        $entity = \hacklabr\get_crm_entity_by_id( 'account', $entity_id );
+        $entity = fetch_crm_entity( 'account', $entity_id );
 
         if ( ! empty( $entity ) ) {
             return import_account( $entity, false );
@@ -315,7 +341,7 @@ function get_contact( $entity_id ) {
     ] );
 
     if ( empty( $existing_users ) ) {
-        $entity = \hacklabr\get_crm_entity_by_id( 'contact', $entity_id );
+        $entity = fetch_crm_entity( 'contact', $entity_id );
 
         if ( ! empty( $entity ) ) {
             return import_contact( $entity, false );
@@ -485,6 +511,7 @@ function import_accounts_command( $args, $assoc_args ) {
 
     foreach( $accounts as $account ) {
         try {
+            cache_crm_entity( $account );
             import_account( $account, $force_update );
             $count++;
         } catch ( \Exception $err ) {
@@ -503,6 +530,7 @@ function import_accounts_command( $args, $assoc_args ) {
 
     foreach( $contacts as $contact ) {
         try {
+            cache_crm_entity( $contact );
             import_contact( $contact, $force_update );
             $count++;
         } catch ( \Exception $err ) {
