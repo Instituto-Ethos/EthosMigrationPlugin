@@ -79,6 +79,15 @@ function is_active_account( $account ) {
     return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
 }
 
+function is_active_contact( $contact ) {
+    $account_id = $contact->Attributes['parentcustomerid']?->Id ?? null;
+    if ( empty( $account_id ) ) {
+        return false;
+    }
+    $account = \hacklabr\get_crm_entity_by_id( 'account', $account_id );
+    return is_active_account( $account );
+}
+
 function is_parent_company( $account ) {
     return ( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169;
 }
@@ -326,6 +335,12 @@ function import_contact( $entity, $force_update = false ) {
 
     cli_log( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}", 'debug' );
 
+    // Don't import users without organization
+    if ( ! is_active_contact( $entity ) ) {
+        cli_log( "Not in business", 'debug' );
+        return null;
+    }
+
     $existing_users = get_users( [
         'meta_query' => [
             [ 'key' => '_ethos_crm_contact_id', 'value' => $entity_id ],
@@ -334,11 +349,6 @@ function import_contact( $entity, $force_update = false ) {
 
     if ( empty( $existing_users ) ) {
         $password = wp_generate_password( 16 );
-
-        // Don't import users without organization
-        if ( empty( $attributes['parentcustomerid'] ) ) {
-            return null;
-        }
 
         $user_id = wp_insert_user( [
             'display_name' => $user_meta['nome_completo'],
@@ -478,7 +488,7 @@ function import_accounts_command( $args, $assoc_args ) {
             import_account( $account, $force_update );
             $count++;
         } catch ( \Exception $err ) {
-            cli_log( $err->getMessage(), 'error' );
+            cli_log( $err->getMessage(), 'warning' );
         }
     }
 
