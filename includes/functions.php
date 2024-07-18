@@ -165,6 +165,9 @@ function remove_sem_categoria( $post ) {
     }
 }
 
+/**
+ * Cria evento (TEC) dos posts com metadado data-do-evento (sem horário)
+ */
 function set_events_only_date( $post ) {
     $date = get_post_meta( $post->ID, 'data-do-evento', true );
 
@@ -176,10 +179,16 @@ function set_events_only_date( $post ) {
     }
 }
 
+/**
+ * Cria evento (TEC) dos posts com data e horário
+ */
 function set_events_date_time( $post ) {
     create_events_from_cedoc( $post, 'ethos\\factory_date_time' );
 }
 
+/**
+ * Cria evento (TEC) dos posts sem data
+ */
 function set_events_without_date( $post ) {
     $date = get_post_meta( $post->ID, 'data-do-evento', true );
     if ( ! $date ) {
@@ -189,8 +198,10 @@ function set_events_without_date( $post ) {
     }
 }
 
+/**
+ * Cria eventos a partir de um post
+ */
 function create_events_from_cedoc( $post, $fn ) {
-
     if ( ! is_event_created( $post->ID ) ) {
         $dates = $fn( $post );
 
@@ -220,7 +231,7 @@ function create_events_from_cedoc( $post, $fn ) {
                     'post_author'             => $post->post_author,
                     'post_category'           => $post->post_category,
                     'post_content_filtered'   => $post->post_content_filtered,
-                    'post_content'            => $post->post_content,
+                    'post_content'            => apply_filters( 'the_content', $post->post_content ),
                     'post_date_gmt'           => $post->post_date_gmt,
                     'post_date'               => $post->post_date,
                     'post_excerpt'            => $post->post_excerpt,
@@ -300,6 +311,9 @@ function create_events_from_cedoc( $post, $fn ) {
     }
 }
 
+/**
+ * Formata a data para o padrão do TEC
+ */
 function factory_date( $post ) {
     $date = get_post_meta( $post->ID, 'data-do-evento', true );
 
@@ -317,6 +331,9 @@ function factory_date( $post ) {
     ];
 }
 
+/**
+ * Define termos para o evento
+ */
 function assign_terms_to_event( $post_id, $event_id, $taxonomy ) {
     $terms = wp_get_post_terms( $post_id, $taxonomy );
 
@@ -326,8 +343,10 @@ function assign_terms_to_event( $post_id, $event_id, $taxonomy ) {
     }
 }
 
+/**
+ * Define o local do evento
+ */
 function set_venue_by_post( $post ) {
-
     if ( ! function_exists( 'tribe_get_events' ) ) {
         return false;
     }
@@ -360,9 +379,11 @@ function set_venue_by_post( $post ) {
     }
 
     return false;
-
 }
 
+/**
+ * Verifica se o local já existe
+ */
 function check_if_venue_exists( $venue_name ) {
     $args = [
         'post_type'   => 'tribe_venue',
@@ -379,6 +400,9 @@ function check_if_venue_exists( $venue_name ) {
     return false;
 }
 
+/**
+ * Converte a data e horário para o padrão do TEC
+ */
 function factory_date_time( $post ) {
     $date = get_post_meta( $post->ID, 'data-do-evento', true );
     $time = get_post_meta( $post->ID, 'horario', true );
@@ -441,6 +465,9 @@ function factory_date_time( $post ) {
     return false;
 }
 
+/**
+ * Cria data e horário fake para o evento
+ */
 function factory_fake_date_time() {
     $start_date = '1980-01-01 00:00:00';
     $end_date = '1980-01-02 23:59:59';
@@ -455,6 +482,9 @@ function factory_fake_date_time() {
     ];
 }
 
+/**
+ * Exibe log de eventos não migrados
+ */
 function log_not_migrated_events( $post ) {
     $error = get_post_meta( $post->ID, 'ethos_migration_format_error', true );
 
@@ -465,6 +495,9 @@ function log_not_migrated_events( $post ) {
     }
 }
 
+/**
+ * Formata horário
+ */
 function format_time( $time ) {
     $original_time = $time;
     $time = trim( $time );
@@ -556,6 +589,9 @@ function format_time( $time ) {
     ];
 }
 
+/**
+ * Converte data para formato TEC de eventos que duram um dia
+ */
 function convert_date_to_allday_tec( $date, $time ) {
     $date_time = \DateTime::createFromFormat( 'd/m/Y H:i:s', $date . ' ' . $time );
 
@@ -566,6 +602,9 @@ function convert_date_to_allday_tec( $date, $time ) {
     return false;
 }
 
+/**
+ * Converte data para formato UTC
+ */
 function convert_to_utc( $local_datetime ) {
     $timezone_string = get_option( 'timezone_string' ) ?: 'America/Sao_Paulo';
     $timezone = new \DateTimeZone( $timezone_string );
@@ -576,20 +615,28 @@ function convert_to_utc( $local_datetime ) {
     return $date->format( 'Y-m-d H:i:s' );
 }
 
+/**
+ * Verifica se a data está no formato "dd/mm/yyyy"
+ */
 function is_valid_date_format( $date_string ) {
     // "dd/mm/yyyy"
     $regex = '/^([0-2][0-9]|(3)[0-1])\/(0[1-9]|1[0-2])\/\d{4}$/';
     return preg_match($regex, $date_string) === 1;
 }
 
+/**
+ * Verifica se a hora está no formato "H:i:s"
+ */
 function is_valid_time_format( $time_string ) {
     // "H:i:s"
     $regex = '/^([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/';
     return preg_match( $regex, $time_string ) === 1;
 }
 
+/**
+ * Verifica se o evento já foi criado no WP
+ */
 function is_event_created( $post_id ) {
-
     if ( ! function_exists( 'tribe_get_events' ) ) {
         return false;
     }
@@ -615,5 +662,13 @@ function is_event_created( $post_id ) {
     $get_posts = tribe_get_events( $args );
 
     return ! empty( $get_posts );
+}
 
+/**
+ * Aplica filtros padrões do WP no conteúdo do post
+ * 
+ * @example wp modify-posts q:post_type=tribe_events fn:ethos\\format_the_content;
+ */
+function format_the_content( $post ) {
+    $post->post_content = apply_filters( 'the_content', $post->post_content );
 }
