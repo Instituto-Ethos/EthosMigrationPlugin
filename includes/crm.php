@@ -30,6 +30,26 @@ function cli_log ( string $message, string $level = 'log' ) {
     }
 }
 
+function generate_unique_user_login( $user_name ) {
+	$login_base = substr( sanitize_title( $user_name ), 0, 60 );
+
+    if ( empty( get_user_by( 'login', $login_base ) ) ) {
+        return $login_base;
+    }
+
+    $i = 2;
+
+    while ( true ) {
+        $login = $login_base . '-' . $i;
+
+        if ( empty( get_user_by( 'login', $login ) ) ) {
+            return $login;
+        }
+
+        $i++;
+    }
+}
+
 function get_pmpro_level_id ( $post_id, $level_name ) {
     $level_slugs = [
         'Conexão' => 'conexao',
@@ -318,11 +338,16 @@ function import_contact( $entity, $force_update = false ) {
         $user_id = wp_insert_user( [
             'display_name' => $user_meta['nome_completo'],
             'user_email' => $user_meta['email'],
-            'user_login' => sanitize_title( $user_meta['nome_completo'] ),
+            'user_login' => generate_unique_user_login( $user_meta['nome_completo'] ),
             'user_pass' => $password,
             'role' => 'subscriber',
             'meta_input' => $user_meta,
         ] );
+
+        if ( is_wp_error( $user_id ) ) {
+            cli_log( $user_id->get_error_message(), 'warning' );
+            return null;
+        }
 
         if ( ! empty( $attributes['parentcustomerid'] ) ) {
             $post_id = get_account( $attributes['parentcustomerid']->Id );
@@ -471,7 +496,7 @@ function import_accounts_command( $args, $assoc_args ) {
             import_contact( $contact, $force_update );
             $count++;
         } catch ( \Exception $err ) {
-            cli_log( $err->getMessage(), 'error' );
+            cli_log( $err->getMessage(), 'warning' );
         }
     }
 
