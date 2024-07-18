@@ -6,7 +6,7 @@ namespace ethos;
  * Better than calling `array_filter` than `array_unique` because the latter
  * preserve keys
  */
-function array_unique_values( $array ) {
+function array_unique_values( array $array ) {
     $return = [];
 
     foreach ( $array as $el ) {
@@ -16,6 +16,18 @@ function array_unique_values( $array ) {
     }
 
     return $return;
+}
+
+/**
+ * If inside `wp` CLI, prints the message
+ *
+ * @param string $message The message to be printed
+ * @param string $level One of 'debug', 'error', 'log', 'success' or 'warning'
+ */
+function cli_log ( string $message, string $level = 'log' ) {
+    if ( class_exists( '\WP_CLI' ) ) {
+        call_user_func( [ \WP_CLI::class, $level ], $message );
+    }
 }
 
 function get_pmpro_level_id ( $post_id, $level_name ) {
@@ -249,7 +261,7 @@ function import_account( $entity, $force_update = false ) {
         // @TODO Set featured image
 
         if ( class_exists( '\WP_CLI' ) ) {
-            \WP_CLI::debug( "Created post with ID = {$post_id}" );
+            cli_log( "Created post with ID = {$post_id}", 'debug' );
         }
 
         return $post_id;
@@ -417,13 +429,13 @@ function count_economic_groups_command() {
     $count = 0;
 
     foreach( $accounts as $account ) {
-        if ( is_economic_group( $account ) ) {
-            \WP_CLI::success( "Found group {$account->Attributes['name']} ({$account->Id})." );
+        if ( is_parent_company( $account ) ) {
+            cli_log( "Found group {$account->Attributes['name']} ({$account->Id}).", 'success' );
             $count++;
         }
     }
 
-    \WP_CLI::success( "Found {$count} groups." );
+    cli_log( "Found {$count} groups.", 'success' );
 }
 
 function import_accounts_command( $args, $assoc_args ) {
@@ -441,11 +453,15 @@ function import_accounts_command( $args, $assoc_args ) {
     $count = 0;
 
     foreach( $accounts as $account ) {
-        import_account( $account, $force_update );
-        $count++;
+        try {
+            import_account( $account, $force_update );
+            $count++;
+        } catch ( \Exception $err ) {
+            cli_log( $err->getMessage(), 'error' );
+        }
     }
 
-    \WP_CLI::success( "Finished importing {$count} accounts." );
+    cli_log( "Finished importing {$count} accounts.", 'success' );
 
     $contacts = \hacklabr\iterate_crm_entities( 'contact', [
         'orderby' => 'fullname',
@@ -455,11 +471,15 @@ function import_accounts_command( $args, $assoc_args ) {
     $count = 0;
 
     foreach( $contacts as $contact ) {
-        import_contact( $contact, $force_update );
-        $count++;
+        try {
+            import_contact( $contact, $force_update );
+            $count++;
+        } catch ( \Exception $err ) {
+            cli_log( $err->getMessage(), 'error' );
+        }
     }
 
-    \WP_CLI::success( "Finished importing {$count} contacts." );
+    cli_log( "Finished importing {$count} contacts.", 'success' );
 }
 
 function dont_notify_imported_users ( $send, $user ) {
