@@ -231,7 +231,7 @@ function create_events_from_cedoc( $post, $fn ) {
                     'post_author'             => $post->post_author,
                     'post_category'           => $post->post_category,
                     'post_content_filtered'   => $post->post_content_filtered,
-                    'post_content'            => $post->post_content,
+                    'post_content'            => apply_filters( 'the_content', $post->post_content ),
                     'post_date_gmt'           => $post->post_date_gmt,
                     'post_date'               => $post->post_date,
                     'post_excerpt'            => $post->post_excerpt,
@@ -662,4 +662,13 @@ function is_event_created( $post_id ) {
     $get_posts = tribe_get_events( $args );
 
     return ! empty( $get_posts );
+}
+
+/**
+ * Aplica filtros padrões do WP no conteúdo do post
+ * 
+ * @example wp modify-posts q:post_type=tribe_events fn:ethos\\format_the_content;
+ */
+function format_the_content( $post ) {
+    $post->post_content = apply_filters( 'the_content', $post->post_content );
 }
