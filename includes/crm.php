@@ -542,7 +542,12 @@ function import_accounts_command( $args, $assoc_args ) {
 }
 
 function dont_notify_imported_users ( $send, $user ) {
-    $is_imported = get_user_meta( $user->ID, '_ethos_from_crm', true );
+    if ( $user instanceof \WP_User ) {
+        $user_id = $user->ID;
+    } else {
+        $user_id = (int) ( $user ?? 0 );
+    }
+    $is_imported = get_user_meta( $user_id, '_ethos_from_crm', true );
 
     if ( ! empty( $is_imported ) && $is_imported == '1' ) {
         return false;
