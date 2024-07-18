@@ -75,7 +75,7 @@ function sanitize_number( $string ) {
 }
 
 function is_active_account( $account ) {
-    $account_status = $account->FormattedValues['fut_pl_associac'] ?? '';
+    $account_status = $account->FormattedValues['fut_pl_associacao'] ?? '';
     return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
 }
 
