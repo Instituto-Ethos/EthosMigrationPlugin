@@ -216,9 +216,13 @@ function import_account( $entity, $force_update = false ) {
             'meta_input' => $post_meta,
         ] );
 
-        // Update author after post creation to avoid infinite loop
         if ( ! empty( $attributes['primarycontactid'] ) && ! empty( $formatted['fut_pl_tipo_associacao'] ) ) {
+            // Update author after post creation to avoid infinite loop
             set_main_contact( $post_id, $attributes['primarycontactid']->Id, $formatted['fut_pl_tipo_associacao'] );
+        }
+
+        if ( ! empty( $attributes['i4d_aprovador_cortesia'] ) ) {
+            set_approver( $post_id, $attributes['i4d_aprovador_cortesia']->Id );
         }
 
         // @TODO Set featured image
@@ -263,6 +267,8 @@ function get_contact( $entity_id ) {
 
 function import_contact( $entity, $force_update = false ) {
     $entity_id = $entity->Id;
+    $attributes = $entity->Attributes;
+
     $user_meta = parse_contact_into_user_meta( $entity );
 
     if ( class_exists( '\WP_CLI' ) ) {
@@ -287,8 +293,9 @@ function import_contact( $entity, $force_update = false ) {
             'meta_input' => $user_meta,
         ] );
 
-        if ( ! empty( $entity->Attributes['parentcustomerid'] ) ) {
-            add_contact_to_account( $user_id, $entity->Attributes['parentcustomerid']->Id );
+        if ( ! empty( $attributes['parentcustomerid'] ) ) {
+            $post_id = get_account( $attributes['parentcustomerid']->Id );
+            add_contact_to_organization( $user_id, $post_id );
         }
 
         if ( class_exists( '\WP_CLI' ) ) {
@@ -314,25 +321,18 @@ function approve_contact( $user_id, $level_id ) {
     return \PMPro_Approvals::approveMember( $user_id, $level_id, true );
 }
 
-function add_contact_to_account( $user_id, $account_id ) {
+function add_contact_to_organization( $user_id, $post_id ) {
     $existing_group_id = get_user_meta( $user_id, '_pmpro_group', true );
     if ( ! empty( $existing_group_id ) ) {
         return (int) $existing_group_id;
     }
-
-    $post_id = get_account( $account_id );
 
     $group_id = (int) ( get_post_meta( $post_id, '_pmpro_group', true ) ?? 0 );
 
     if ( ! empty( $group_id ) ) {
         $membership = \hacklabr\add_user_to_pmpro_group( $user_id, $group_id );
 
-        wp_update_user([
-            'ID' => $user_id,
-            'meta_input' => [
-                '_pmpro_group' => $group_id,
-            ],
-        ]);
+        update_user_meta( $user_id, '_pmpro_group', $group_id );
 
         approve_contact( $group_id, $membership->group_child_level_id );
     }
@@ -372,6 +372,16 @@ function set_main_contact( $post_id, $contact_id, $level_name ) {
     approve_contact( $user_id, $level_id );
 
     return $group->id;
+}
+
+function set_approver( $post_id, $contact_id ) {
+    $user_id = get_contact( $contact_id ) ?? 0;
+
+    if ( empty( get_user_meta( $user_id, '_pmpro_group', true ) ) ) {
+        add_contact_to_organization( $user_id, $post_id );
+    }
+
+    update_user_meta( $user_id, '_ethos_approver', '1' );
 }
 
 function count_economic_groups_command() {
