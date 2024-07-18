@@ -74,7 +74,7 @@ function sanitize_number( $string ) {
     return str_replace( [ '+', '-' ], '', filter_var( $string, FILTER_SANITIZE_NUMBER_INT ) );
 }
 
-function is_current_member( $account ) {
+function is_active_account( $account ) {
     $account_status = $account->FormattedValues['fut_pl_associac'] ?? '';
     return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
 }
@@ -239,7 +239,7 @@ function import_account( $entity, $force_update = false ) {
     $attributes = $entity->Attributes;
     $formatted = $entity->FormattedValues;
 
-    $should_import = is_current_member( $entity );
+    $should_import = is_active_account( $entity );
     if ( is_parent_company( $entity ) || is_subsidiary_company( $entity ) ) {
         $should_import = false;
     }
@@ -335,6 +335,11 @@ function import_contact( $entity, $force_update = false ) {
     if ( empty( $existing_users ) ) {
         $password = wp_generate_password( 16 );
 
+        // Don't import users without organization
+        if ( empty( $attributes['parentcustomerid'] ) ) {
+            return null;
+        }
+
         $user_id = wp_insert_user( [
             'display_name' => $user_meta['nome_completo'],
             'user_email' => $user_meta['email'],
@@ -349,13 +354,8 @@ function import_contact( $entity, $force_update = false ) {
             return null;
         }
 
-        if ( ! empty( $attributes['parentcustomerid'] ) ) {
-            $post_id = get_account( $attributes['parentcustomerid']->Id );
-
-            if ( ! empty( $post_id ) ) {
-                add_contact_to_organization( $user_id, $post_id );
-            }
-        }
+        $post_id = get_account( $attributes['parentcustomerid']->Id );
+        add_contact_to_organization( $user_id, $post_id );
 
         cli_log( "Created user with ID = {$user_id}", 'debug' );
 
