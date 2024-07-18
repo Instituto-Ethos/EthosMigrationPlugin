@@ -42,6 +42,11 @@ function sanitize_number( $string ) {
     return str_replace( [ '+', '-' ], '', filter_var( $string, FILTER_SANITIZE_NUMBER_INT ) );
 }
 
+function is_current_member( $account ) {
+    $account_status = $account->FormattedValues['fut_pl_associac'] ?? '';
+    return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
+}
+
 function is_parent_company( $account ) {
     return ( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169;
 }
@@ -206,11 +211,15 @@ function import_account( $entity, $force_update = false ) {
         return null;
     }
 
-    $post_meta = parse_account_into_post_meta( $entity );
+    if ( ! is_current_member( $entity ) ) {
+        return null;
+    }
 
     if ( class_exists( '\WP_CLI' ) ) {
         \WP_CLI::debug( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}" );
     }
+
+    $post_meta = parse_account_into_post_meta( $entity );
 
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
