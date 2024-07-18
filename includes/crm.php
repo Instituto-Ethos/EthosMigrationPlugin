@@ -374,6 +374,24 @@ function set_main_contact( $post_id, $contact_id, $level_name ) {
     return $group->id;
 }
 
+function count_economic_groups_command() {
+    $accounts = \hacklabr\iterate_crm_entities( 'account', [
+        'orderby' => 'name',
+        'order' => 'ASC',
+    ] );
+
+    $count = 0;
+
+    foreach( $accounts as $account ) {
+        if ( strlen( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169 ) {
+            \WP_CLI::success( "Found group {$account->Attributes['name']} ({$account->Id})." );
+            $count++;
+        }
+    }
+
+    \WP_CLI::success( "Found {$count} groups." );
+}
+
 function import_accounts_command( $args, $assoc_args ) {
     $parsed_args = wp_parse_args( $assoc_args, [
         'update' => false,
@@ -426,6 +444,7 @@ add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\dont_notify_importe
 
 function register_import_accounts_command() {
     if ( class_exists( '\WP_CLI' ) ) {
+        \WP_CLI::add_command( 'count-economic-groups', 'ethos\\count_economic_groups_command' );
         \WP_CLI::add_command( 'import-accounts', 'ethos\\import_accounts_command' );
     }
 }
