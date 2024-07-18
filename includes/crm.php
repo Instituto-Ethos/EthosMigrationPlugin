@@ -219,19 +219,19 @@ function import_account( $entity, $force_update = false ) {
     $attributes = $entity->Attributes;
     $formatted = $entity->FormattedValues;
 
+    $should_import = is_current_member( $entity );
     if ( is_parent_company( $entity ) || is_subsidiary_company( $entity ) ) {
-        return null;
-    }
-
-    if ( ! is_current_member( $entity ) ) {
-        return null;
-    }
-
-    if ( class_exists( '\WP_CLI' ) ) {
-        \WP_CLI::debug( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}" );
+        $should_import = false;
     }
 
     $post_meta = parse_account_into_post_meta( $entity );
+
+    if ( $should_import ) {
+        cli_log( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
+    } else {
+        cli_log( "Skipping account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
+        return null;
+    }
 
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
@@ -304,9 +304,7 @@ function import_contact( $entity, $force_update = false ) {
 
     $user_meta = parse_contact_into_user_meta( $entity );
 
-    if ( class_exists( '\WP_CLI' ) ) {
-        \WP_CLI::debug( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}" );
-    }
+    cli_log( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}", 'debug' );
 
     $existing_users = get_users( [
         'meta_query' => [
@@ -334,9 +332,7 @@ function import_contact( $entity, $force_update = false ) {
             }
         }
 
-        if ( class_exists( '\WP_CLI' ) ) {
-            \WP_CLI::debug( "Created user with ID = {$user_id}" );
-        }
+        cli_log( "Created user with ID = {$user_id}", 'debug' );
 
         return $user_id;
     }
