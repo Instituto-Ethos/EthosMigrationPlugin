@@ -30,6 +30,12 @@ function cli_log( string $message, string $level = 'log' ) {
     }
 }
 
+function generate_unique_email( $email, $folder ) {
+    $email_parts = explode( '@', $email );
+    $slug = sanitize_title( $folder );
+    return $email_parts[0] . '+' . $slug . '@' . $email_parts[1];
+}
+
 function generate_unique_user_login( $user_name ) {
 	$login_base = substr( sanitize_title( $user_name ), 0, 60 );
 
@@ -100,17 +106,24 @@ function fetch_crm_entity( $entity_type, $entity_id ) {
     return cache_crm_entity( $entity );
 }
 
+function get_account_by_contact( $contact ) {
+    $account_id = $contact->Attributes['parentcustomerid']?->Id ?? null;
+    if ( empty( $account_id ) ) {
+        return null;
+    }
+    return fetch_crm_entity( 'account', $account_id ) ?? null;
+}
+
 function is_active_account( $account ) {
     $account_status = $account->FormattedValues['fut_pl_associacao'] ?? '';
     return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
 }
 
 function is_active_contact( $contact ) {
-    $account_id = $contact->Attributes['parentcustomerid']?->Id ?? null;
-    if ( empty( $account_id ) ) {
+    $account = get_account_by_contact( $contact );
+    if ( empty( $account ) ) {
         return false;
     }
-    $account = fetch_crm_entity( 'account', $account_id );
     return is_active_account( $account );
 }
 
@@ -210,11 +223,6 @@ function parse_contact_into_user_meta( $entity ) {
     $attributes = $entity->Attributes;
     $formatted = $entity->FormattedValues;
 
-    /**
-     * _ethos_admin
-     * _pmpro_group
-     */
-
     $phones = [
         sanitize_number( $attributes['mobilephone'] ?? '' ),
         sanitize_number( $attributes['telephone1'] ?? '' ),
@@ -224,6 +232,7 @@ function parse_contact_into_user_meta( $entity ) {
 
     $user_meta = [
         '_ethos_from_crm' => 1,
+        '_ethos_crm_account_id' => $attributes['parentcustomerid']?->Id ?? '',
         '_ethos_crm_contact_id' => $entity_id,
         '_pmpro_role' => $attributes['fut_bt_financeiro'] ? 'financial' : 'primary',
 
@@ -252,7 +261,7 @@ function get_account( $entity_id ) {
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
         'meta_query' => [
-            [ '_ethos_crm_account_id' => $entity_id ],
+            [ 'key' => '_ethos_crm_account_id', 'value' => $entity_id ],
         ],
     ] );
 
@@ -274,14 +283,11 @@ function import_account( $entity, $force_update = false ) {
     $attributes = $entity->Attributes;
     $formatted = $entity->FormattedValues;
 
-    $should_import = is_active_account( $entity );
-    if ( is_parent_company( $entity ) || is_subsidiary_company( $entity ) ) {
-        $should_import = false;
-    }
-
     $post_meta = parse_account_into_post_meta( $entity );
+    $is_parent = is_parent_company( $entity );
+    $is_subsidiary = is_subsidiary_company( $entity );
 
-    if ( $should_import ) {
+    if ( is_active_account( $entity ) && ! $is_parent && ! $is_subsidiary ) {
         cli_log( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
     } else {
         cli_log( "Skipping account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
@@ -333,15 +339,16 @@ function import_account( $entity, $force_update = false ) {
     return $existing_posts[0]->ID;
 }
 
-function get_contact( $entity_id ) {
+function get_contact( $contact_id, $account_id ) {
     $existing_users = get_users( [
         'meta_query' => [
-            [ 'key' => '_ethos_crm_contact_id', 'value' => $entity_id ],
+            [ 'key' => '_ethos_crm_account_id', 'value' => $account_id ],
+            [ 'key' => '_ethos_crm_contact_id', 'value' => $contact_id ],
         ],
     ] );
 
     if ( empty( $existing_users ) ) {
-        $entity = fetch_crm_entity( 'contact', $entity_id );
+        $entity = fetch_crm_entity( 'contact', $contact_id );
 
         if ( ! empty( $entity ) ) {
             return import_contact( $entity, false, false );
@@ -362,13 +369,15 @@ function import_contact( $entity, $force_import = false, $force_update = false )
     cli_log( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}", 'debug' );
 
     // Don't import users without organization
-    if ( ! $force_import && ! is_active_contact( $entity ) ) {
-        cli_log( "Not in business", 'debug' );
+    if ( ! is_active_contact( $entity ) && ! $force_import ) {
         return null;
     }
 
+    $account = get_account_by_contact( $attributes['parentcustomerid']->Id );
+
     $existing_users = get_users( [
         'meta_query' => [
+            [ 'key' => '_ethos_crm_account_id', 'value' => $account->Id ],
             [ 'key' => '_ethos_crm_contact_id', 'value' => $entity_id ],
         ],
     ] );
@@ -439,7 +448,9 @@ function set_main_contact( $post_id, $contact_id, $level_name ) {
         return (int) $existing_group_id;
     }
 
-    $user_id = get_contact( $contact_id ) ?? 0;
+    $account_id = get_post_meta( $post_id, '_ethos_crm_account_id', true );
+
+    $user_id = get_contact( $contact_id, $account_id ) ?? 0;
 
     $level_id = get_pmpro_level_id( $post_id, $level_name );
 
@@ -468,7 +479,9 @@ function set_main_contact( $post_id, $contact_id, $level_name ) {
 }
 
 function set_approver( $post_id, $contact_id ) {
-    $user_id = get_contact( $contact_id ) ?? 0;
+    $account_id = get_post_meta( $post_id, '_ethos_crm_account_id', true );
+
+    $user_id = get_contact( $contact_id, $account_id ) ?? 0;
 
     if ( empty( get_user_meta( $user_id, '_pmpro_group', true ) ) ) {
         add_contact_to_organization( $user_id, $post_id );
