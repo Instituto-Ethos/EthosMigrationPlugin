@@ -135,10 +135,10 @@ function is_subsidiary_company( $account ) {
     return $account->Attributes['fut_bt_pertencegrupo'] ?? false;
 }
 
-function parse_account_into_post_meta( $entity ) {
-    $entity_id = $entity->Id;
-    $attributes = $entity->Attributes;
-    $formatted = $entity->FormattedValues;
+function parse_account_into_post_meta( $account ) {
+    $account_id = $account->Id;
+    $attributes = $account->Attributes;
+    $formatted = $account->FormattedValues;
 
     $revenue_base = $attributes['revenue_base'] ?? 0;
     if ( $revenue_base < 10_000_000 ) {
@@ -183,7 +183,7 @@ function parse_account_into_post_meta( $entity ) {
 
     $post_meta = [
         '_ethos_from_crm' => 1,
-        '_ethos_crm_account_id' => $entity_id,
+        '_ethos_crm_account_id' => $account_id,
         '_ethos_crm_lead_id' => $lead_id,
 
         'cnpj' => trim( $attributes['fut_st_cnpjsemmascara'] ?? '' ),
@@ -218,10 +218,10 @@ function parse_account_into_post_meta( $entity ) {
     return $post_meta;
 }
 
-function parse_contact_into_user_meta( $entity ) {
-    $entity_id = $entity->Id;
-    $attributes = $entity->Attributes;
-    $formatted = $entity->FormattedValues;
+function parse_contact_into_user_meta( $contact ) {
+    $contact_id = $contact->Id;
+    $attributes = $contact->Attributes;
+    $formatted = $contact->FormattedValues;
 
     $phones = [
         sanitize_number( $attributes['mobilephone'] ?? '' ),
@@ -233,7 +233,7 @@ function parse_contact_into_user_meta( $entity ) {
     $user_meta = [
         '_ethos_from_crm' => 1,
         '_ethos_crm_account_id' => $attributes['parentcustomerid']?->Id ?? '',
-        '_ethos_crm_contact_id' => $entity_id,
+        '_ethos_crm_contact_id' => $contact_id,
         '_pmpro_role' => $attributes['fut_bt_financeiro'] ? 'financial' : 'primary',
 
         'nome_completo' => trim( $attributes['fullname'] ?? '' ),
@@ -257,19 +257,19 @@ function parse_contact_into_user_meta( $entity ) {
     return $user_meta;
 }
 
-function get_account( $entity_id ) {
+function get_account( $account_id ) {
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
         'meta_query' => [
-            [ 'key' => '_ethos_crm_account_id', 'value' => $entity_id ],
+            [ 'key' => '_ethos_crm_account_id', 'value' => $account_id ],
         ],
     ] );
 
     if ( empty( $existing_posts ) ) {
-        $entity = fetch_crm_entity( 'account', $entity_id );
+        $account = fetch_crm_entity( 'account', $account_id );
 
-        if ( ! empty( $entity ) ) {
-            return import_account( $entity, false );
+        if ( ! empty( $account ) ) {
+            return import_account( $account, false );
         }
     } else {
         return $existing_posts[0]->ID;
@@ -278,16 +278,16 @@ function get_account( $entity_id ) {
     return null;
 }
 
-function import_account( $entity, $force_update = false ) {
-    $entity_id = $entity->Id;
-    $attributes = $entity->Attributes;
-    $formatted = $entity->FormattedValues;
+function import_account( $account, $force_update = false ) {
+    $account_id = $account->Id;
+    $attributes = $account->Attributes;
+    $formatted = $account->FormattedValues;
 
-    $post_meta = parse_account_into_post_meta( $entity );
-    $is_parent = is_parent_company( $entity );
-    $is_subsidiary = is_subsidiary_company( $entity );
+    $post_meta = parse_account_into_post_meta( $account );
+    $is_parent = is_parent_company( $account );
+    $is_subsidiary = is_subsidiary_company( $account );
 
-    if ( is_active_account( $entity ) && ! $is_parent && ! $is_subsidiary ) {
+    if ( is_active_account( $account ) && ! $is_parent && ! $is_subsidiary ) {
         cli_log( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
     } else {
         cli_log( "Skipping account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
@@ -297,7 +297,7 @@ function import_account( $entity, $force_update = false ) {
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
         'meta_query' => [
-            [ 'key' => '_ethos_crm_account_id', 'value' => $entity_id ],
+            [ 'key' => '_ethos_crm_account_id', 'value' => $account_id ],
         ],
     ] );
 
@@ -348,10 +348,10 @@ function get_contact( $contact_id, $account_id ) {
     ] );
 
     if ( empty( $existing_users ) ) {
-        $entity = fetch_crm_entity( 'contact', $contact_id );
+        $contact = fetch_crm_entity( 'contact', $contact_id );
 
-        if ( ! empty( $entity ) ) {
-            return import_contact( $entity, false, false );
+        if ( ! empty( $contact ) ) {
+            return import_contact( $contact, false, false );
         }
     } else {
         return $existing_users[0]->ID;
@@ -360,16 +360,16 @@ function get_contact( $contact_id, $account_id ) {
     return null;
 }
 
-function import_contact( $entity, $force_import = false, $force_update = false ) {
-    $entity_id = $entity->Id;
-    $attributes = $entity->Attributes;
+function import_contact( $contact, $force_import = false, $force_update = false ) {
+    $contact_id = $contact->Id;
+    $attributes = $contact->Attributes;
 
-    $user_meta = parse_contact_into_user_meta( $entity );
+    $user_meta = parse_contact_into_user_meta( $contact );
 
     cli_log( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}", 'debug' );
 
     // Don't import users without organization
-    if ( ! is_active_contact( $entity ) && ! $force_import ) {
+    if ( ! is_active_contact( $contact ) && ! $force_import ) {
         return null;
     }
 
@@ -378,7 +378,7 @@ function import_contact( $entity, $force_import = false, $force_update = false )
     $existing_users = get_users( [
         'meta_query' => [
             [ 'key' => '_ethos_crm_account_id', 'value' => $account->Id ],
-            [ 'key' => '_ethos_crm_contact_id', 'value' => $entity_id ],
+            [ 'key' => '_ethos_crm_contact_id', 'value' => $contact_id ],
         ],
     ] );
 
