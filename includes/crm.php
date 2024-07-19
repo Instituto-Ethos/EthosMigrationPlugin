@@ -30,10 +30,10 @@ function cli_log( string $message, string $level = 'log' ) {
     }
 }
 
-function generate_unique_email( $email, $folder ) {
+function generate_unique_email( $email, $account ) {
     $email_parts = explode( '@', $email );
-    $slug = sanitize_title( $folder );
-    return $email_parts[0] . '+' . $slug . '@' . $email_parts[1];
+    $folder = sanitize_title( $account->Attributes['name'] );
+    return $email_parts[0] . '+' . $folder . '@' . $email_parts[1];
 }
 
 function generate_unique_user_login( $user_name ) {
@@ -223,12 +223,17 @@ function parse_contact_into_user_meta( $contact ) {
     $attributes = $contact->Attributes;
     $formatted = $contact->FormattedValues;
 
+    $account = get_account_by_contact( $contact );
+
     $phones = [
         sanitize_number( $attributes['mobilephone'] ?? '' ),
         sanitize_number( $attributes['telephone1'] ?? '' ),
         sanitize_number( $attributes['telephone2'] ?? '' ),
     ];
     $phones = array_unique_values( $phones );
+
+    $email = trim( $attributes['emailaddress1'] ?? '@' );
+    $email = is_subsidiary_company( $account ) ? generate_unique_email( $email, $account ) : $email;
 
     $user_meta = [
         '_ethos_from_crm' => 1,
@@ -240,7 +245,7 @@ function parse_contact_into_user_meta( $contact ) {
         'cpf' => sanitize_number( $attributes['fut_st_cpf'] ?? '' ),
         'cargo' => trim( $attributes['jobtitle'] ?? '' ),
         'area' => trim( $formatted['fut_pl_area'] ?? '' ),
-        'email' => trim( $attributes['emailaddress1'] ?? '' ),
+        'email' => $email,
         'celular' => $phones[ 0 ] ?? '',
         'celular_is_whatsapp' => '',
         'telefone' => $phones[ 1 ] ?? '',
@@ -284,10 +289,8 @@ function import_account( $account, $force_update = false ) {
     $formatted = $account->FormattedValues;
 
     $post_meta = parse_account_into_post_meta( $account );
-    $is_parent = is_parent_company( $account );
-    $is_subsidiary = is_subsidiary_company( $account );
 
-    if ( is_active_account( $account ) && ! $is_parent && ! $is_subsidiary ) {
+    if ( is_active_account( $account ) ) {
         cli_log( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
     } else {
         cli_log( "Skipping account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
@@ -302,11 +305,18 @@ function import_account( $account, $force_update = false ) {
     ] );
 
     if ( empty( $existing_posts ) ) {
+        $post_parent = 0;
+
+        if ( is_subsidiary_company( $account ) ) {
+            $post_parent = get_account( $attributes['parentaccountid']->Id ) ?? 0;
+        }
+
         $post_id = wp_insert_post( [
             'post_type' => 'organizacao',
             'post_title' => $post_meta['nome_fantasia'],
             'post_content' => '',
             'post_status' => 'publish',
+            'post_parent' => $post_parent,
             'meta_input' => $post_meta,
         ] );
 
