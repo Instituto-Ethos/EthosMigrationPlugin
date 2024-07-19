@@ -344,7 +344,7 @@ function get_contact( $entity_id ) {
         $entity = fetch_crm_entity( 'contact', $entity_id );
 
         if ( ! empty( $entity ) ) {
-            return import_contact( $entity, false );
+            return import_contact( $entity, false, false );
         }
     } else {
         return $existing_users[0]->ID;
@@ -353,7 +353,7 @@ function get_contact( $entity_id ) {
     return null;
 }
 
-function import_contact( $entity, $force_update = false ) {
+function import_contact( $entity, $force_import = false, $force_update = false ) {
     $entity_id = $entity->Id;
     $attributes = $entity->Attributes;
 
@@ -362,7 +362,7 @@ function import_contact( $entity, $force_update = false ) {
     cli_log( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}", 'debug' );
 
     // Don't import users without organization
-    if ( ! is_active_contact( $entity ) ) {
+    if ( ! $force_import && ! is_active_contact( $entity ) ) {
         cli_log( "Not in business", 'debug' );
         return null;
     }
@@ -486,6 +486,7 @@ function count_economic_groups_command() {
     $count = 0;
 
     foreach( $accounts as $account ) {
+        cache_crm_entity( $account );
         if ( is_parent_company( $account ) ) {
             cli_log( "Found group {$account->Attributes['name']} ({$account->Id}).", 'success' );
             $count++;
@@ -531,7 +532,7 @@ function import_accounts_command( $args, $assoc_args ) {
     foreach( $contacts as $contact ) {
         try {
             cache_crm_entity( $contact );
-            import_contact( $contact, $force_update );
+            import_contact( $contact, true, $force_update );
             $count++;
         } catch ( \Exception $err ) {
             cli_log( $err->getMessage(), 'warning' );
