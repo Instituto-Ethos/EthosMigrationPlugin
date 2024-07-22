@@ -26,7 +26,11 @@ function array_unique_values( array $array ) {
  */
 function cli_log( string $message, string $level = 'log' ) {
     if ( class_exists( '\WP_CLI' ) ) {
-        call_user_func( [ \WP_CLI::class, $level ], $message );
+        if ( $level === 'error' ) {
+            call_user_func( [ \WP_CLI::class, $level ], $message, false );
+        } else {
+            call_user_func( [ \WP_CLI::class, $level ], $message );
+        }
     }
 }
 
@@ -424,7 +428,7 @@ function import_contact( $contact, $account = null, $force_update = false ) {
         }
 
         if ( is_wp_error( $user_id ) ) {
-            cli_log( $user_id->get_error_message(), 'warning' );
+            cli_log( $user_id->get_error_message(), 'error' );
             return null;
         }
 
@@ -560,7 +564,7 @@ function import_accounts_command( $args, $assoc_args ) {
             import_account( $account, $force_update );
             $count++;
         } catch ( \Throwable $err ) {
-            cli_log( $err->getMessage(), 'warning' );
+            cli_log( $err->getMessage(), 'error' );
         }
     }
 
@@ -579,7 +583,7 @@ function import_accounts_command( $args, $assoc_args ) {
             import_contact( $contact, null, $force_update );
             $count++;
         } catch ( \Throwable $err ) {
-            cli_log( $err->getMessage(), 'warning' );
+            cli_log( $err->getMessage(), 'error' );
         }
     }
 
