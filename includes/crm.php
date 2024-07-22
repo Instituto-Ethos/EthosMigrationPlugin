@@ -119,10 +119,13 @@ function is_active_account( $account ) {
     return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
 }
 
-function is_active_contact( $contact ) {
-    $account = get_account_by_contact( $contact );
+function is_active_contact( $contact, $account = null ) {
     if ( empty( $account ) ) {
-        return false;
+        $account = get_account_by_contact( $contact );
+
+        if ( empty( $account ) ) {
+            return false;
+        }
     }
     return is_active_account( $account );
 }
@@ -218,12 +221,10 @@ function parse_account_into_post_meta( $account ) {
     return $post_meta;
 }
 
-function parse_contact_into_user_meta( $contact ) {
+function parse_contact_into_user_meta( $contact, $account ) {
     $contact_id = $contact->Id;
     $attributes = $contact->Attributes;
     $formatted = $contact->FormattedValues;
-
-    $account = get_account_by_contact( $contact );
 
     $phones = [
         sanitize_number( $attributes['mobilephone'] ?? '' ),
@@ -358,10 +359,11 @@ function get_contact( $contact_id, $account_id ) {
     ] );
 
     if ( empty( $existing_users ) ) {
+        $account = fetch_crm_entity( 'account', $account_id );
         $contact = fetch_crm_entity( 'contact', $contact_id );
 
         if ( ! empty( $contact ) ) {
-            return import_contact( $contact, false, false );
+            return import_contact( $contact, $account, false );
         }
     } else {
         return $existing_users[0]->ID;
@@ -370,20 +372,22 @@ function get_contact( $contact_id, $account_id ) {
     return null;
 }
 
-function import_contact( $contact, $force_import = false, $force_update = false ) {
+function import_contact( $contact, $account = null, $force_update = false ) {
     $contact_id = $contact->Id;
     $attributes = $contact->Attributes;
 
-    $user_meta = parse_contact_into_user_meta( $contact );
+    $user_meta = parse_contact_into_user_meta( $contact, $account );
 
     cli_log( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}", 'debug' );
 
     // Don't import users without organization
-    if ( ! is_active_contact( $contact ) && ! $force_import ) {
-        return null;
+    if ( empty( $account ) ) {
+        if ( is_active_contact( $contact, null ) ) {
+            $account = get_account_by_contact( $contact );
+        } else {
+            return null;
+        }
     }
-
-    $account = get_account_by_contact( $attributes['parentcustomerid']->Id );
 
     $existing_users = get_users( [
         'meta_query' => [
@@ -395,14 +399,23 @@ function import_contact( $contact, $force_import = false, $force_update = false 
     if ( empty( $existing_users ) ) {
         $password = wp_generate_password( 16 );
 
-        $user_id = wp_insert_user( [
-            'display_name' => $user_meta['nome_completo'],
-            'user_email' => $user_meta['email'],
-            'user_login' => generate_unique_user_login( $user_meta['nome_completo'] ),
-            'user_pass' => $password,
-            'role' => 'subscriber',
-            'meta_input' => $user_meta,
-        ] );
+        $existing_user_by_email = get_user_by( 'email', $user_meta['email'] );
+
+        if ( $existing_user_by_email ) {
+            $user_id = wp_update_user([
+                'ID' => $existing_user_by_email->ID,
+                'meta_input' => $user_meta,
+            ]);
+        } else {
+            $user_id = wp_insert_user( [
+                'display_name' => $user_meta['nome_completo'],
+                'user_email' => $user_meta['email'],
+                'user_login' => generate_unique_user_login( $user_meta['nome_completo'] ),
+                'user_pass' => $password,
+                'role' => 'subscriber',
+                'meta_input' => $user_meta,
+            ] );
+        }
 
         if ( is_wp_error( $user_id ) ) {
             cli_log( $user_id->get_error_message(), 'warning' );
@@ -555,7 +568,7 @@ function import_accounts_command( $args, $assoc_args ) {
     foreach( $contacts as $contact ) {
         try {
             cache_crm_entity( $contact );
-            import_contact( $contact, true, $force_update );
+            import_contact( $contact, null, $force_update );
             $count++;
         } catch ( \Exception $err ) {
             cli_log( $err->getMessage(), 'warning' );
