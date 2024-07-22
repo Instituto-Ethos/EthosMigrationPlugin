@@ -292,9 +292,9 @@ function import_account( $account, $force_update = false ) {
     $post_meta = parse_account_into_post_meta( $account );
 
     if ( is_active_account( $account ) ) {
-        cli_log( "Importing account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
+        cli_log( "Importing account {$post_meta['nome_fantasia']} — {$account->Id}", 'debug' );
     } else {
-        cli_log( "Skipping account {$post_meta['nome_fantasia']} — {$post_meta['cnpj']}", 'debug' );
+        cli_log( "Skipping account {$post_meta['nome_fantasia']} — {$account->Id}", 'debug' );
         return null;
     }
 
@@ -374,11 +374,10 @@ function get_contact( $contact_id, $account_id ) {
 
 function import_contact( $contact, $account = null, $force_update = false ) {
     $contact_id = $contact->Id;
-    $attributes = $contact->Attributes;
 
     $user_meta = parse_contact_into_user_meta( $contact, $account );
 
-    cli_log( "Importing contact {$user_meta['nome_completo']} — {$user_meta['cpf']}", 'debug' );
+    cli_log( "Importing contact {$user_meta['nome_completo']} — {$contact->Id}", 'debug' );
 
     // Don't import users without organization
     if ( empty( $account ) ) {
