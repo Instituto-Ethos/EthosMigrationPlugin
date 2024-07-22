@@ -34,6 +34,44 @@ function cli_log( string $message, string $level = 'log' ) {
     }
 }
 
+function csv_init() {
+    global $ethos_crm_csv;
+
+    $ethos_crm_csv = [
+        [ 'ID', 'Nome', 'Login', 'E-mail', 'Recuperação de senha' ],
+    ];
+}
+
+function csv_add_line( $user_id ) {
+    global $ethos_crm_csv;
+
+    $user = get_user_by( 'id', $user_id );
+
+    $recovery_link = sprintf( 'http://localhost/wp-login.php?action=rp&key=%s&login=%s&lang=pt_BR', get_password_reset_key( $user ), $user->user_login  );
+
+    $ethos_crm_csv[] = [
+        $user->ID,
+        $user->display_name,
+        $user->user_login,
+        $user->user_email,
+        $recovery_link,
+    ];
+}
+
+function csv_finish() {
+    global $ethos_crm_csv;
+
+    $date = substr( date_format( date_create( 'now' ), 'c' ), 0, 19 );
+
+    $file = fopen( wp_upload_dir()['path'] . '/imported-contacts-' . $date . '.csv', 'w' );
+
+    foreach ( $ethos_crm_csv as $line ) {
+        fputcsv( $file, $line );
+    }
+
+    fclose( $file );
+}
+
 function generate_unique_email( $email, $account ) {
     $email_parts = explode( '@', $email );
     $folder = sanitize_title( $account->Attributes['name'] );
@@ -425,6 +463,8 @@ function import_contact( $contact, $account = null, $force_update = false ) {
                 'role' => 'subscriber',
                 'meta_input' => $user_meta,
             ] );
+
+            csv_add_line( $user_id );
         }
 
         if ( is_wp_error( $user_id ) ) {
@@ -544,6 +584,7 @@ function count_economic_groups_command() {
 
 function import_accounts_command( $args, $assoc_args ) {
     set_hacklab_as_current_user();
+    csv_init();
 
     $parsed_args = wp_parse_args( $assoc_args, [
         'update' => false,
@@ -587,6 +628,7 @@ function import_accounts_command( $args, $assoc_args ) {
         }
     }
 
+    csv_finish();
     cli_log( "Finished importing {$count} contacts.", 'success' );
 }
 
