@@ -464,7 +464,11 @@ function import_contact( $contact, $account = null, $force_update = false ) {
                 'meta_input' => $user_meta,
             ] );
 
-            csv_add_line( $user_id );
+            if ( empty( $user_id ) ) {
+                return null;
+            } else if ( ! is_wp_error( $user_id ) ) {
+                csv_add_line( $user_id );
+            }
         }
 
         if ( is_wp_error( $user_id ) ) {
