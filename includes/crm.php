@@ -422,7 +422,7 @@ function import_contact( $contact, $account = null, $force_update = false ) {
             return null;
         }
 
-        $post_id = get_account( $attributes['parentcustomerid']->Id );
+        $post_id = get_account( $account->Id );
         add_contact_to_organization( $user_id, $post_id );
 
         cli_log( "Created user with ID = {$user_id}", 'debug' );
