@@ -559,7 +559,7 @@ function import_accounts_command( $args, $assoc_args ) {
             cache_crm_entity( $account );
             import_account( $account, $force_update );
             $count++;
-        } catch ( \Exception $err ) {
+        } catch ( \Throwable $err ) {
             cli_log( $err->getMessage(), 'warning' );
         }
     }
@@ -578,7 +578,7 @@ function import_accounts_command( $args, $assoc_args ) {
             cache_crm_entity( $contact );
             import_contact( $contact, null, $force_update );
             $count++;
-        } catch ( \Exception $err ) {
+        } catch ( \Throwable $err ) {
             cli_log( $err->getMessage(), 'warning' );
         }
     }
