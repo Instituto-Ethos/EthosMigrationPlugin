@@ -609,6 +609,12 @@ add_filter( 'pmpro_wp_new_user_notification', 'ethos\\dont_notify_imported_users
 add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\dont_notify_imported_users', 20, 2 );
 add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\dont_notify_imported_users', 20, 2 );
 
+function change_password_expiry_time( $expiration ) {
+    $diff = strtotime( '2024-10-01' ) - time();
+    return max( $diff, $expiration );
+}
+add_filter( 'password_reset_expiration', 'ethos\\change_password_expiry_time' );
+
 function register_import_accounts_command() {
     if ( class_exists( '\WP_CLI' ) ) {
         \WP_CLI::add_command( 'count-economic-groups', 'ethos\\count_economic_groups_command' );
