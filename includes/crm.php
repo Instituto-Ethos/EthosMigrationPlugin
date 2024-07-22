@@ -465,7 +465,7 @@ function add_contact_to_organization( $user_id, $post_id ) {
 
         update_user_meta( $user_id, '_pmpro_group', $group_id );
 
-        approve_contact( $group_id, $membership->group_child_level_id );
+        approve_contact( $user_id, $membership->group_child_level_id );
     }
 
     return $group_id ?: null;
