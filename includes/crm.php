@@ -263,6 +263,13 @@ function parse_contact_into_user_meta( $contact, $account ) {
     return $user_meta;
 }
 
+function set_hacklab_as_current_user() {
+    $user = get_user_by( 'login', 'hacklab' );
+    if ( ! empty( $user ) ) {
+        wp_set_current_user( $user->ID, $user->user_login );
+    }
+}
+
 function get_account( $account_id ) {
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
@@ -532,6 +539,8 @@ function count_economic_groups_command() {
 }
 
 function import_accounts_command( $args, $assoc_args ) {
+    set_hacklab_as_current_user();
+
     $parsed_args = wp_parse_args( $assoc_args, [
         'update' => false,
     ] );
