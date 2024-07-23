@@ -566,25 +566,6 @@ function set_approver( $post_id, $contact_id ) {
     update_user_meta( $user_id, '_ethos_approver', '1' );
 }
 
-function count_economic_groups_command() {
-    $accounts = \hacklabr\iterate_crm_entities( 'account', [
-        'orderby' => 'name',
-        'order' => 'ASC',
-    ] );
-
-    $count = 0;
-
-    foreach( $accounts as $account ) {
-        cache_crm_entity( $account );
-        if ( is_parent_company( $account ) ) {
-            cli_log( "Found group {$account->Attributes['name']} ({$account->Id}).", 'success' );
-            $count++;
-        }
-    }
-
-    cli_log( "Found {$count} groups.", 'success' );
-}
-
 function import_accounts_command( $args, $assoc_args ) {
     set_hacklab_as_current_user();
     csv_init();
@@ -645,7 +626,7 @@ function disable_pmpro_emails( $pre, $option ) {
 }
 add_filter( 'pre_option', 'ethos\\disable_pmpro_emails', 10, 2 );
 
-function disable_wp_emails ( $send, $user ) {
+function disable_wp_emails( $send, $user ) {
     if ( $user instanceof \WP_User ) {
         $user_id = $user->ID;
     } else {
@@ -672,7 +653,6 @@ add_filter( 'password_reset_expiration', 'ethos\\change_password_expiry_time' );
 
 function register_import_accounts_command() {
     if ( class_exists( '\WP_CLI' ) ) {
-        \WP_CLI::add_command( 'count-economic-groups', 'ethos\\count_economic_groups_command' );
         \WP_CLI::add_command( 'import-accounts', 'ethos\\import_accounts_command' );
     }
 }
