@@ -252,9 +252,9 @@ function parse_account_into_post_meta( $account ) {
     ];
 
     foreach ( $attributes as $key => $value ) {
-        if ( is_object( $value ) ) {
-            $post_meta['_ethos_crm:' . $key ] = json_encode( $value, JSON_FORCE_OBJECT );
-        } elseif ( ! empty( $value ) ) {
+        if ( is_array( $value ) || is_object( $value ) ) {
+            $post_meta['_ethos_crm:' . $key ] = json_encode( $value );
+        } elseif ( ! empty( $value ) || is_numeric( $value ) ) {
             $post_meta['_ethos_crm:' . $key ] = $value;
         }
     }
@@ -294,9 +294,9 @@ function parse_contact_into_user_meta( $contact, $account ) {
     ];
 
     foreach ( $attributes as $key => $value ) {
-        if ( is_object( $value ) ) {
-            $user_meta['_ethos_crm:' . $key ] = json_encode( $value, JSON_FORCE_OBJECT );
-        } elseif ( ! empty( $value ) ) {
+        if ( is_array( $value ) || is_object( $value ) ) {
+            $user_meta['_ethos_crm:' . $key ] = json_encode( $value );
+        } elseif ( ! empty( $value ) || is_numeric( $value ) ) {
             $user_meta['_ethos_crm:' . $key ] = $value;
         }
     }
