@@ -635,7 +635,17 @@ function import_accounts_command( $args, $assoc_args ) {
     cli_log( "Finished importing {$count} contacts.", 'success' );
 }
 
-function dont_notify_imported_users ( $send, $user ) {
+function disable_pmpro_emails( $pre, $option ) {
+    if ( class_exists( '\WP_CLI' ) ) {
+        if ( str_starts_with( $option, 'pmpro_email_' ) && str_ends_with( $option, '_disabled' ) ) {
+            return true;
+        }
+    }
+    return $pre;
+}
+add_filter( 'pre_option', 'ethos\\disable_pmpro_emails', 10, 2 );
+
+function disable_wp_emails ( $send, $user ) {
     if ( $user instanceof \WP_User ) {
         $user_id = $user->ID;
     } else {
@@ -649,10 +659,10 @@ function dont_notify_imported_users ( $send, $user ) {
 
     return $send;
 }
-add_filter( 'pmpro_approvals_after_approve_member_send_emails', 'ethos\\dont_notify_imported_users', 20, 2 );
-add_filter( 'pmpro_wp_new_user_notification', 'ethos\\dont_notify_imported_users', 20, 2 );
-add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\dont_notify_imported_users', 20, 2 );
-add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\dont_notify_imported_users', 20, 2 );
+add_filter( 'pmpro_approvals_after_approve_member_send_emails', 'ethos\\disable_wp_emails', 20, 2 );
+add_filter( 'pmpro_wp_new_user_notification', 'ethos\\disable_wp_emails', 20, 2 );
+add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\disable_wp_emails', 20, 2 );
+add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\disable_wp_emails', 20, 2 );
 
 function change_password_expiry_time( $expiration ) {
     $diff = strtotime( '2024-10-01' ) - time();
