@@ -45,7 +45,16 @@ function csv_init() {
 
     $ethos_crm_csv = fopen( wp_upload_dir()['basedir'] . '/imported-contacts-' . $date . '.csv', 'w' );
 
-    fputcsv( $ethos_crm_csv, [ 'ID', 'Nome', 'Login', 'E-mail', 'Empresa', 'Recuperação de senha' ] );
+    fputcsv( $ethos_crm_csv, [
+        'Contato - ID',
+        'Usuário - ID',
+        'Usuário - Nome',
+        'Usuário - Login',
+        'Usuário - E-mail',
+        'Conta - ID',
+        'Conta - Nome',
+        'Usuário - Link de recuperação de senha',
+    ] );
 }
 
 function csv_add_line( $user_id, $account ) {
@@ -53,13 +62,17 @@ function csv_add_line( $user_id, $account ) {
 
     $user = get_user_by( 'id', $user_id );
 
+    $account_id = get_user_meta( $user_id, '_ethos_crm_contact_id', true );
+
     $recovery_link = sprintf( 'http://localhost/wp-login.php?action=rp&key=%s&login=%s&lang=pt_BR', get_password_reset_key( $user ), $user->user_login  );
 
     fputcsv( $ethos_crm_csv, [
+        $account_id,
         $user->ID,
         $user->display_name,
         $user->user_login,
         $user->user_email,
+        $account->Id,
         $account->Attributes['name'] ?? '',
         $recovery_link,
     ] );
