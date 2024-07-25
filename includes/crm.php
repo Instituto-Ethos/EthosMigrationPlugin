@@ -584,44 +584,50 @@ function import_accounts_command( $args, $assoc_args ) {
     csv_init();
 
     $parsed_args = wp_parse_args( $assoc_args, [
+        'type' => 'all',
         'update' => false,
     ] );
 
+    $import_type = $parsed_args['type'];
     $force_update = $parsed_args['update'];
 
-    $accounts = \hacklabr\iterate_crm_entities( 'account', [
-        'orderby' => 'name',
-        'order' => 'ASC',
-    ] );
+    if ( $import_type === 'account' || $import_type === 'all' ) {
+        $accounts = \hacklabr\iterate_crm_entities( 'account', [
+            'orderby' => 'name',
+            'order' => 'ASC',
+        ] );
 
-    $count = 0;
+        $count = 0;
 
-    foreach( $accounts as $account ) {
-        try {
-            cache_crm_entity( $account );
-            import_account( $account, $force_update );
-            $count++;
-        } catch ( \Throwable $err ) {
-            cli_log( $err->getMessage(), 'error' );
+        foreach( $accounts as $account ) {
+            try {
+                cache_crm_entity( $account );
+                import_account( $account, $force_update );
+                $count++;
+            } catch ( \Throwable $err ) {
+                cli_log( $err->getMessage(), 'error' );
+            }
         }
+
+        cli_log( "Finished importing {$count} accounts.", 'success' );
     }
 
-    cli_log( "Finished importing {$count} accounts.", 'success' );
+    if ( $import_type === 'contact' || $import_type === 'all' ) {
+        $contacts = \hacklabr\iterate_crm_entities( 'contact', [
+            'orderby' => 'fullname',
+            'order' => 'ASC',
+        ] );
 
-    $contacts = \hacklabr\iterate_crm_entities( 'contact', [
-        'orderby' => 'fullname',
-        'order' => 'ASC',
-    ] );
+        $count = 0;
 
-    $count = 0;
-
-    foreach( $contacts as $contact ) {
-        try {
-            cache_crm_entity( $contact );
-            import_contact( $contact, null, $force_update );
-            $count++;
-        } catch ( \Throwable $err ) {
-            cli_log( $err->getMessage(), 'error' );
+        foreach( $contacts as $contact ) {
+            try {
+                cache_crm_entity( $contact );
+                import_contact( $contact, null, $force_update );
+                $count++;
+            } catch ( \Throwable $err ) {
+                cli_log( $err->getMessage(), 'error' );
+            }
         }
     }
 
