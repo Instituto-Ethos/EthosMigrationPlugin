@@ -2,6 +2,8 @@
 
 namespace ethos;
 
+use \AlexaCRM\Xrm\Entity;
+
 /**
  * Better than calling `array_filter` than `array_unique` because the latter
  * preserve keys
@@ -57,7 +59,7 @@ function csv_init() {
     ] );
 }
 
-function csv_add_line( $user_id, $account ) {
+function csv_add_line( int $user_id, Entity $account ) {
     global $ethos_crm_csv;
 
     $user = get_user_by( 'id', $user_id );
@@ -84,13 +86,13 @@ function csv_finish() {
     fclose( $ethos_crm_csv );
 }
 
-function generate_unique_email( $email, $account ) {
+function generate_unique_email( string $email, Entity $account ) {
     $email_parts = explode( '@', $email );
     $folder = sanitize_title( $account->Attributes['name'] );
     return $email_parts[0] . '+' . $folder . '@' . $email_parts[1];
 }
 
-function generate_unique_user_login( $user_name ) {
+function generate_unique_user_login( string $user_name ) {
 	$login_base = substr( sanitize_title( $user_name ), 0, 60 );
 
     if ( empty( get_user_by( 'login', $login_base ) ) ) {
@@ -110,7 +112,7 @@ function generate_unique_user_login( $user_name ) {
     }
 }
 
-function get_pmpro_level_id( $post_id, $level_name ) {
+function get_pmpro_level_id( int $post_id, string $level_name ) {
     $level_slugs = [
         'Conexão' => 'conexao',
         'Essencial' => 'essencial',
@@ -127,53 +129,27 @@ function get_pmpro_level_id( $post_id, $level_name ) {
     return \hacklabr\Fields\get_pmpro_level_options( $post_id )[ $level_slug ] ?? null;
 }
 
-function sanitize_number( $string ) {
+function sanitize_number( string $string ) {
     if ( empty( $string ) ) {
         return '';
     }
     return str_replace( [ '+', '-' ], '', filter_var( $string, FILTER_SANITIZE_NUMBER_INT ) );
 }
 
-function cache_crm_entity( $entity ) {
-    global $ethos_crm_cache;
-
-    if ( empty( $ethos_crm_cache ) ) {
-        $ethos_crm_cache = [];
-    } else if ( empty( $ethos_crm_cache[ $entity->LogicalName ] ) ) {
-        $ethos_crm_cache[ $entity->LogicalName ] = [];
-    }
-
-    $ethos_crm_cache[ $entity->LogicalName ][ $entity->Id ] = $entity;
-    return $entity;
-}
-
-function fetch_crm_entity( $entity_type, $entity_id ) {
-    global $ethos_crm_cache;
-
-    $cached_value = $ethos_crm_cache[ $entity_type ][ $entity_id ] ?? null;
-
-    if ( ! empty( $cached_value ) ) {
-        return $cached_value;
-    }
-
-    $entity = \hacklabr\get_crm_entity_by_id( $entity_type, $entity_id );
-    return cache_crm_entity( $entity );
-}
-
-function get_account_by_contact( $contact ) {
+function get_account_by_contact( Entity $contact ) {
     $account_id = $contact->Attributes['parentcustomerid']?->Id ?? null;
     if ( empty( $account_id ) ) {
         return null;
     }
-    return fetch_crm_entity( 'account', $account_id ) ?? null;
+    return \hacklabr\get_crm_entity_by_id( 'account', $account_id ) ?? null;
 }
 
-function is_active_account( $account ) {
+function is_active_account( Entity $account ) {
     $account_status = $account->FormattedValues['fut_pl_associacao'] ?? '';
     return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
 }
 
-function is_active_contact( $contact, $account = null ) {
+function is_active_contact( Entity $contact, Entity|null $account = null ) {
     if ( empty( $account ) ) {
         $account = get_account_by_contact( $contact );
 
@@ -184,15 +160,15 @@ function is_active_contact( $contact, $account = null ) {
     return is_active_account( $account );
 }
 
-function is_parent_company( $account ) {
+function is_parent_company( Entity $account ) {
     return strlen( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169;
 }
 
-function is_subsidiary_company( $account ) {
+function is_subsidiary_company( Entity $account ) {
     return $account->Attributes['fut_bt_pertencegrupo'] ?? false;
 }
 
-function parse_account_into_post_meta( $account ) {
+function parse_account_into_post_meta( Entity $account ) {
     $account_id = $account->Id;
     $attributes = $account->Attributes;
     $formatted = $account->FormattedValues;
@@ -275,7 +251,7 @@ function parse_account_into_post_meta( $account ) {
     return $post_meta;
 }
 
-function parse_contact_into_user_meta( $contact, $account ) {
+function parse_contact_into_user_meta( Entity $contact, Entity $account ) {
     $contact_id = $contact->Id;
     $attributes = $contact->Attributes;
     $formatted = $contact->FormattedValues;
@@ -324,7 +300,7 @@ function set_hacklab_as_current_user() {
     }
 }
 
-function get_account( $account_id ) {
+function get_account( string $account_id ) {
     $existing_posts = get_posts( [
         'post_type' => 'organizacao',
         'meta_query' => [
@@ -333,7 +309,7 @@ function get_account( $account_id ) {
     ] );
 
     if ( empty( $existing_posts ) ) {
-        $account = fetch_crm_entity( 'account', $account_id );
+        $account = \hacklabr\get_crm_entity_by_id( 'account', $account_id );
 
         if ( ! empty( $account ) ) {
             return import_account( $account, false );
@@ -345,7 +321,7 @@ function get_account( $account_id ) {
     return null;
 }
 
-function import_account( $account, $force_update = false ) {
+function import_account( Entity $account, bool $force_update = false ) {
     $account_id = $account->Id;
     $attributes = $account->Attributes;
     $formatted = $account->FormattedValues;
@@ -411,7 +387,7 @@ function import_account( $account, $force_update = false ) {
     return $existing_posts[0]->ID;
 }
 
-function get_contact( $contact_id, $account_id ) {
+function get_contact( string $contact_id, string $account_id ) {
     $existing_users = get_users( [
         'meta_query' => [
             [ 'key' => '_ethos_crm_account_id', 'value' => $account_id ],
@@ -420,8 +396,8 @@ function get_contact( $contact_id, $account_id ) {
     ] );
 
     if ( empty( $existing_users ) ) {
-        $account = fetch_crm_entity( 'account', $account_id );
-        $contact = fetch_crm_entity( 'contact', $contact_id );
+        $account = \hacklabr\get_crm_entity_by_id( 'account', $account_id );
+        $contact = \hacklabr\get_crm_entity_by_id( 'contact', $contact_id );
 
         if ( ! empty( $contact ) ) {
             return import_contact( $contact, $account, false );
@@ -433,7 +409,7 @@ function get_contact( $contact_id, $account_id ) {
     return null;
 }
 
-function import_contact( $contact, $account = null, $force_update = false ) {
+function import_contact( Entity $contact, Entity|null $account = null, bool $force_update = false ) {
     $contact_id = $contact->Id;
 
     $user_meta = parse_contact_into_user_meta( $contact, $account );
@@ -508,11 +484,11 @@ function import_contact( $contact, $account = null, $force_update = false ) {
     return $existing_users[0]->ID;
 }
 
-function approve_contact( $user_id, $level_id ) {
+function approve_contact( int $user_id, int $level_id ) {
     return \PMPro_Approvals::approveMember( $user_id, $level_id, true );
 }
 
-function add_contact_to_organization( $user_id, $post_id ) {
+function add_contact_to_organization( int $user_id, int $post_id ) {
     $existing_group_id = get_user_meta( $user_id, '_pmpro_group', true );
     if ( ! empty( $existing_group_id ) ) {
         return (int) $existing_group_id;
@@ -531,7 +507,7 @@ function add_contact_to_organization( $user_id, $post_id ) {
     return $group_id ?: null;
 }
 
-function set_main_contact( $post_id, $contact_id, $level_name ) {
+function set_main_contact( int $post_id, string $contact_id, string $level_name ) {
     $existing_group_id = get_post_meta( $post_id, '_pmpro_group', true );
     if ( ! empty( $existing_group_id ) ) {
         return (int) $existing_group_id;
@@ -567,7 +543,7 @@ function set_main_contact( $post_id, $contact_id, $level_name ) {
     return $group->id;
 }
 
-function set_approver( $post_id, $contact_id ) {
+function set_approver( int $post_id, string $contact_id ) {
     $account_id = get_post_meta( $post_id, '_ethos_crm_account_id', true );
 
     $user_id = get_contact( $contact_id, $account_id ) ?? 0;
@@ -579,7 +555,7 @@ function set_approver( $post_id, $contact_id ) {
     update_user_meta( $user_id, '_ethos_approver', '1' );
 }
 
-function import_accounts_command( $args, $assoc_args ) {
+function import_accounts_command( array $args, array $assoc_args ) {
     set_hacklab_as_current_user();
     csv_init();
 
@@ -601,7 +577,7 @@ function import_accounts_command( $args, $assoc_args ) {
 
         foreach( $accounts as $account ) {
             try {
-                cache_crm_entity( $account );
+                \hacklabr\cache_crm_entity( $account );
                 import_account( $account, $force_update );
                 $count++;
             } catch ( \Throwable $err ) {
@@ -622,7 +598,7 @@ function import_accounts_command( $args, $assoc_args ) {
 
         foreach( $contacts as $contact ) {
             try {
-                cache_crm_entity( $contact );
+                \hacklabr\cache_crm_entity( $contact );
                 import_contact( $contact, null, $force_update );
                 $count++;
             } catch ( \Throwable $err ) {
