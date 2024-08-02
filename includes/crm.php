@@ -360,15 +360,15 @@ function import_account( Entity $account, bool $force_update = false ) {
 
         if ( ! empty( $attributes['primarycontactid'] ) && ! empty( $formatted['fut_pl_tipo_associacao'] ) ) {
             // Update author after post creation to avoid infinite loop
-            set_main_contact( $post_id, $attributes['primarycontactid']->Id, $formatted['fut_pl_tipo_associacao'] );
+            set_primary_contact( $post_id, $attributes['primarycontactid']->Id, $formatted['fut_pl_tipo_associacao'] );
         }
 
         if ( ! empty( $attributes['fut_lk_contato_alternativo'] ) ) {
-            set_alternative_contact( $post_id, $attributes['fut_lk_contato_alternativo']->Id );
+            set_secondary_contact( $post_id, $attributes['fut_lk_contato_alternativo']->Id );
         }
 
         if ( ! empty( $attributes['fut_lk_contato_alternativo2'] ) ) {
-            set_alternative_contact( $post_id, $attributes['fut_lk_contato_alternativo2']->Id );
+            set_secondary_contact( $post_id, $attributes['fut_lk_contato_alternativo2']->Id );
         }
 
         if ( ! empty( $attributes['i4d_aprovador_cortesia'] ) ) {
@@ -515,7 +515,7 @@ function add_contact_to_organization( int $user_id, int $post_id ) {
     return $group_id ?: null;
 }
 
-function set_main_contact( int $post_id, string $contact_id, string $level_name ) {
+function set_primary_contact( int $post_id, string $contact_id, string $level_name ) {
     $existing_group_id = get_post_meta( $post_id, '_pmpro_group', true );
     if ( ! empty( $existing_group_id ) ) {
         return (int) $existing_group_id;
@@ -551,7 +551,7 @@ function set_main_contact( int $post_id, string $contact_id, string $level_name 
     return $group->id;
 }
 
-function set_alternative_contact( int $post_id, string $contact_id ) {
+function set_secondary_contact( int $post_id, string $contact_id ) {
     $account_id = get_post_meta( $post_id, '_ethos_crm_account_id', true );
 
     $user_id = get_contact( $contact_id, $account_id ) ?? 0;
