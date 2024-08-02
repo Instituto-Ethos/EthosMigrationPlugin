@@ -363,6 +363,14 @@ function import_account( Entity $account, bool $force_update = false ) {
             set_main_contact( $post_id, $attributes['primarycontactid']->Id, $formatted['fut_pl_tipo_associacao'] );
         }
 
+        if ( ! empty( $attributes['fut_lk_contato_alternativo'] ) ) {
+            set_alternative_contact( $post_id, $attributes['fut_lk_contato_alternativo']->Id );
+        }
+
+        if ( ! empty( $attributes['fut_lk_contato_alternativo2'] ) ) {
+            set_alternative_contact( $post_id, $attributes['fut_lk_contato_alternativo2']->Id );
+        }
+
         if ( ! empty( $attributes['i4d_aprovador_cortesia'] ) ) {
             set_approver( $post_id, $attributes['i4d_aprovador_cortesia']->Id );
         }
@@ -541,6 +549,18 @@ function set_main_contact( int $post_id, string $contact_id, string $level_name 
     approve_contact( $user_id, $level_id );
 
     return $group->id;
+}
+
+function set_alternative_contact( int $post_id, string $contact_id ) {
+    $account_id = get_post_meta( $post_id, '_ethos_crm_account_id', true );
+
+    $user_id = get_contact( $contact_id, $account_id ) ?? 0;
+
+    if ( empty( get_user_meta( $user_id, '_pmpro_group', true ) ) ) {
+        add_contact_to_organization( $user_id, $post_id );
+    }
+
+    update_user_meta( $user_id, '_ethos_admin', '1' );
 }
 
 function set_approver( int $post_id, string $contact_id ) {
