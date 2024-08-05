@@ -251,7 +251,7 @@ function parse_account_into_post_meta( Entity $account ) {
     return $post_meta;
 }
 
-function parse_contact_into_user_meta( Entity $contact, Entity $account ) {
+function parse_contact_into_user_meta( Entity $contact, Entity|null $account ) {
     $contact_id = $contact->Id;
     $attributes = $contact->Attributes;
     $formatted = $contact->FormattedValues;
@@ -264,7 +264,9 @@ function parse_contact_into_user_meta( Entity $contact, Entity $account ) {
     $phones = array_unique_values( $phones );
 
     $email = trim( $attributes['emailaddress1'] ?? '@' );
-    $email = is_subsidiary_company( $account ) ? generate_unique_email( $email, $account ) : $email;
+    if ( ! empty( $account ) && is_subsidiary_company( $account ) ) {
+        $email = generate_unique_email( $email, $account );
+    }
 
     $user_meta = [
         '_ethos_from_crm' => 1,
