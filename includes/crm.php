@@ -625,10 +625,11 @@ function import_accounts_command( array $args, array $assoc_args ) {
                 cli_log( $err->getMessage(), 'error' );
             }
         }
+
+        cli_log( "Finished importing {$count} contacts.", 'success' );
     }
 
     csv_finish();
-    cli_log( "Finished importing {$count} contacts.", 'success' );
 }
 
 function disable_pmpro_emails( $pre, $option ) {
