@@ -136,6 +136,18 @@ function sanitize_number( string $string ) {
     return str_replace( [ '+', '-' ], '', filter_var( $string, FILTER_SANITIZE_NUMBER_INT ) );
 }
 
+function compute_contact_role( Entity $contact ) {
+    $attributes = $contact->Attributes;
+
+    if ( $attributes['fut_bt_principal'] ?? false ) {
+        return 'primary';
+    } elseif ( $attributes['fut_bt_financeiro'] ?? false ) {
+        return 'financial';
+    } else {
+        return 'secondary';
+    }
+}
+
 function get_account_by_contact( Entity $contact ) {
     $account_id = $contact->Attributes['parentcustomerid']?->Id ?? null;
     if ( empty( $account_id ) ) {
@@ -272,7 +284,7 @@ function parse_contact_into_user_meta( Entity $contact, Entity|null $account ) {
         '_ethos_from_crm' => 1,
         '_ethos_crm_account_id' => $attributes['parentcustomerid']?->Id ?? '',
         '_ethos_crm_contact_id' => $contact_id,
-        '_pmpro_role' => $attributes['fut_bt_financeiro'] ? 'financial' : 'primary',
+        '_pmpro_role' => compute_contact_role( $contact ),
 
         'nome_completo' => trim( $attributes['fullname'] ?? '' ),
         'cpf' => sanitize_number( $attributes['fut_st_cpf'] ?? '' ),
