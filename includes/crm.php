@@ -162,6 +162,10 @@ function is_active_account( Entity $account ) {
 }
 
 function is_active_contact( Entity $contact, Entity|null $account = null ) {
+    if ( $contact->Attributes['statecode'] != 0 /* Active */ ) {
+        return false;
+    }
+
     if ( empty( $account ) ) {
         $account = get_account_by_contact( $contact );
 
