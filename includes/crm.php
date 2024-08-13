@@ -198,7 +198,7 @@ function parse_account_into_post_meta( Entity $account ) {
         $revenue = 'large';
     }
 
-    $size = \ethos\crm\CompanySize::toSlug( $attributes['fut_pl_porte'] );
+    $size = \ethos\crm\CompanySize::toSlug( $attributes['fut_pl_porte'] ?? null );
 
     if ( ! empty( $attributes['entityimage_url'] ) ) {
         $logo = \hacklabr\get_crm_server_url() . $attributes['entityimage_url'];
