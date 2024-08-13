@@ -66,7 +66,7 @@ function csv_add_line( int $user_id, Entity $account ) {
 
     $account_id = get_user_meta( $user_id, '_ethos_crm_contact_id', true );
 
-    $recovery_link = sprintf( 'http://localhost/wp-login.php?action=rp&key=%s&login=%s&lang=pt_BR', get_password_reset_key( $user ), $user->user_login  );
+    $recovery_link = sprintf( get_home_url() . '/wp-login.php?action=rp&key=%s&login=%s&lang=pt_BR', get_password_reset_key( $user ), $user->user_login  );
 
     fputcsv( $ethos_crm_csv, [
         $account_id,
