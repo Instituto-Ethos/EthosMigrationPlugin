@@ -126,7 +126,7 @@ function get_pmpro_level_id( int $post_id, string $level_name ) {
         return null;
     }
 
-    return \hacklabr\Fields\get_pmpro_level_options( $post_id )[ $level_slug ] ?? null;
+    return \hacklabr\get_pmpro_level_options( $post_id )[ $level_slug ] ?? null;
 }
 
 function sanitize_number( string $string ) {
