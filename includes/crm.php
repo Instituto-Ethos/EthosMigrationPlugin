@@ -162,7 +162,7 @@ function is_active_account( Entity $account ) {
 }
 
 function is_active_contact( Entity $contact, Entity|null $account = null ) {
-    if ( $contact->Attributes['statecode'] != 0 /* Active */ ) {
+    if ( ! crm\ContactStatus::isActive( $contact->Attributes['statecode'] ) ) {
         return false;
     }
 
@@ -198,16 +198,7 @@ function parse_account_into_post_meta( Entity $account ) {
         $revenue = 'large';
     }
 
-    $size_base = strtolower( $formatted['fut_pl_porte'] ?? 'Microempresa');
-    if ( str_contains( $size_base, 'micro' ) ) {
-        $size = 'micro';
-    } elseif ( str_contains( $size_base, 'pequena' ) ) {
-        $size = 'small';
-    } elseif ( str_contains( $size_base, 'média' ) ) {
-        $size = 'medium';
-    } else {
-        $size = 'large';
-    }
+    $size = \ethos\crm\CompanySize::toSlug( $attributes['fut_pl_porte'] ?? null );
 
     if ( ! empty( $attributes['entityimage_url'] ) ) {
         $logo = \hacklabr\get_crm_server_url() . $attributes['entityimage_url'];
