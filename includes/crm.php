@@ -108,60 +108,11 @@ function get_pmpro_level_id( int $post_id, string $level_name ) {
     return \hacklabr\get_pmpro_level_options( $post_id )[ $level_slug ] ?? null;
 }
 
-function get_account_by_contact( Entity $contact ) {
-    $account_id = $contact->Attributes['parentcustomerid']?->Id ?? null;
-    if ( empty( $account_id ) ) {
-        return null;
-    }
-    return \hacklabr\get_crm_entity_by_id( 'account', $account_id ) ?? null;
-}
-
-function is_active_account( Entity $account ) {
-    $account_status = $account->FormattedValues['fut_pl_associacao'] ?? '';
-    return in_array( $account_status, ['Associado', 'Grupo Econômico'] );
-}
-
-function is_active_contact( Entity $contact, Entity|null $account = null ) {
-    if ( ! crm\ContactStatus::isActive( $contact->Attributes['statecode'] ) ) {
-        return false;
-    }
-
-    if ( empty( $account ) ) {
-        $account = get_account_by_contact( $contact );
-
-        if ( empty( $account ) ) {
-            return false;
-        }
-    }
-    return is_active_account( $account );
-}
-
 function set_hacklab_as_current_user() {
     $user = get_user_by( 'login', 'hacklab' );
     if ( ! empty( $user ) ) {
         wp_set_current_user( $user->ID, $user->user_login );
     }
-}
-
-function get_account( string $account_id ) {
-    $existing_posts = get_posts( [
-        'post_type' => 'organizacao',
-        'meta_query' => [
-            [ 'key' => '_ethos_crm_account_id', 'value' => $account_id ],
-        ],
-    ] );
-
-    if ( empty( $existing_posts ) ) {
-        $account = \hacklabr\get_crm_entity_by_id( 'account', $account_id );
-
-        if ( ! empty( $account ) ) {
-            return import_account( $account, false );
-        }
-    } else {
-        return $existing_posts[0]->ID;
-    }
-
-    return null;
 }
 
 function import_account( Entity $account, bool $force_update = false ) {
@@ -171,7 +122,7 @@ function import_account( Entity $account, bool $force_update = false ) {
 
     $post_meta = crm\parse_account_into_post_meta( $account );
 
-    if ( is_active_account( $account ) ) {
+    if ( crm\is_active_account( $account ) ) {
         cli_log( "Importing account {$post_meta['nome_fantasia']} — {$account->Id}", 'debug' );
     } else {
         cli_log( "Skipping account {$post_meta['nome_fantasia']} — {$account->Id}", 'debug' );
@@ -189,7 +140,7 @@ function import_account( Entity $account, bool $force_update = false ) {
         $post_parent = 0;
 
         if ( crm\is_subsidiary_company( $account ) ) {
-            $post_parent = get_account( $attributes['parentaccountid']->Id ) ?? 0;
+            $post_parent = crm\get_post_id_by_account( $attributes['parentaccountid']->Id ) ?? 0;
         }
 
         $post_id = wp_insert_post( [
@@ -267,8 +218,8 @@ function import_contact( Entity $contact, Entity|null $account = null, bool $for
 
     // Don't import users without organization
     if ( empty( $account ) ) {
-        if ( is_active_contact( $contact, null ) ) {
-            $account = get_account_by_contact( $contact );
+        if ( crm\is_active_contact( $contact, null ) ) {
+            $account = crm\get_account_by_contact( $contact );
         } else {
             cli_log( "Skipping contact {$user_meta['nome_completo']} — {$contact->Id}", 'debug' );
             return null;
@@ -316,7 +267,7 @@ function import_contact( Entity $contact, Entity|null $account = null, bool $for
             return null;
         }
 
-        $post_id = get_account( $account->Id );
+        $post_id = crm\get_post_id_by_account( $account->Id );
         add_contact_to_organization( $user_id, $post_id );
 
         cli_log( "Created user with ID = {$user_id}", 'debug' );
