@@ -1,8 +1,9 @@
 <?php
 
-namespace ethos;
+namespace ethos\migration;
 
 use \AlexaCRM\Xrm\Entity;
+use \ethos\crm;
 
 /**
  * If inside `wp` CLI, prints the message
@@ -483,7 +484,7 @@ function disable_pmpro_emails( $pre, $option ) {
     }
     return $pre;
 }
-add_filter( 'pre_option', 'ethos\\disable_pmpro_emails', 10, 2 );
+add_filter( 'pre_option', 'ethos\\migration\\disable_pmpro_emails', 10, 2 );
 
 function disable_wp_emails( $send, $user ) {
     if ( $user instanceof \WP_User ) {
@@ -499,20 +500,20 @@ function disable_wp_emails( $send, $user ) {
 
     return $send;
 }
-add_filter( 'pmpro_approvals_after_approve_member_send_emails', 'ethos\\disable_wp_emails', 20, 2 );
-add_filter( 'pmpro_wp_new_user_notification', 'ethos\\disable_wp_emails', 20, 2 );
-add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\disable_wp_emails', 20, 2 );
-add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\disable_wp_emails', 20, 2 );
+add_filter( 'pmpro_approvals_after_approve_member_send_emails', 'ethos\\migration\\disable_wp_emails', 20, 2 );
+add_filter( 'pmpro_wp_new_user_notification', 'ethos\\migration\\disable_wp_emails', 20, 2 );
+add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\migration\\disable_wp_emails', 20, 2 );
+add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\migration\\disable_wp_emails', 20, 2 );
 
 function change_password_expiry_time( $expiration ) {
     $diff = strtotime( '2024-10-01' ) - time();
     return max( $diff, $expiration );
 }
-add_filter( 'password_reset_expiration', 'ethos\\change_password_expiry_time' );
+add_filter( 'password_reset_expiration', 'ethos\\migration\\change_password_expiry_time' );
 
 function register_import_accounts_command() {
     if ( class_exists( '\WP_CLI' ) ) {
-        \WP_CLI::add_command( 'import-accounts', 'ethos\\import_accounts_command' );
+        \WP_CLI::add_command( 'import-accounts', 'ethos\\migration\\import_accounts_command' );
     }
 }
-add_action( 'init', 'ethos\\register_import_accounts_command' );
+add_action( 'init', 'ethos\\migration\\register_import_accounts_command' );
