@@ -5,22 +5,6 @@ namespace ethos;
 use \AlexaCRM\Xrm\Entity;
 
 /**
- * Better than calling `array_filter` than `array_unique` because the latter
- * preserve keys
- */
-function array_unique_values( array $array ) {
-    $return = [];
-
-    foreach ( $array as $el ) {
-        if ( ! empty( $el ) && ! in_array( $el, $return ) ) {
-            $return[] = $el;
-        }
-    }
-
-    return $return;
-}
-
-/**
  * If inside `wp` CLI, prints the message
  *
  * @param string $message The message to be printed
@@ -86,12 +70,6 @@ function csv_finish() {
     fclose( $ethos_crm_csv );
 }
 
-function generate_unique_email( string $email, Entity $account ) {
-    $email_parts = explode( '@', $email );
-    $folder = sanitize_title( $account->Attributes['name'] );
-    return $email_parts[0] . '+' . $folder . '@' . $email_parts[1];
-}
-
 function generate_unique_user_login( string $user_name ) {
 	$login_base = substr( sanitize_title( $user_name ), 0, 60 );
 
@@ -129,25 +107,6 @@ function get_pmpro_level_id( int $post_id, string $level_name ) {
     return \hacklabr\get_pmpro_level_options( $post_id )[ $level_slug ] ?? null;
 }
 
-function sanitize_number( string $string ) {
-    if ( empty( $string ) ) {
-        return '';
-    }
-    return str_replace( [ '+', '-' ], '', filter_var( $string, FILTER_SANITIZE_NUMBER_INT ) );
-}
-
-function compute_contact_role( Entity $contact ) {
-    $attributes = $contact->Attributes;
-
-    if ( $attributes['fut_bt_principal'] ?? false ) {
-        return 'primary';
-    } elseif ( $attributes['fut_bt_financeiro'] ?? false ) {
-        return 'financial';
-    } else {
-        return 'secondary';
-    }
-}
-
 function get_account_by_contact( Entity $contact ) {
     $account_id = $contact->Attributes['parentcustomerid']?->Id ?? null;
     if ( empty( $account_id ) ) {
@@ -174,132 +133,6 @@ function is_active_contact( Entity $contact, Entity|null $account = null ) {
         }
     }
     return is_active_account( $account );
-}
-
-function is_parent_company( Entity $account ) {
-    return strlen( $account->Attributes['fut_txt_childnode'] ?? '' ) > 169;
-}
-
-function is_subsidiary_company( Entity $account ) {
-    return $account->Attributes['fut_bt_pertencegrupo'] ?? false;
-}
-
-function parse_account_into_post_meta( Entity $account ) {
-    $account_id = $account->Id;
-    $attributes = $account->Attributes;
-    $formatted = $account->FormattedValues;
-
-    $revenue_base = $attributes['revenue_base'] ?? 0;
-    if ( $revenue_base < 10_000_000 ) {
-        $revenue = 'small';
-    } elseif ( $revenue_base < 300_000_000 ) {
-        $revenue = 'medium';
-    } else {
-        $revenue = 'large';
-    }
-
-    $size = \ethos\crm\CompanySize::toSlug( $attributes['fut_pl_porte'] ?? null );
-
-    if ( ! empty( $attributes['entityimage_url'] ) ) {
-        $logo = \hacklabr\get_crm_server_url() . $attributes['entityimage_url'];
-    } else {
-        $logo = '';
-    }
-
-    $logradouro = trim( $attributes['fut_address1_logradouro'] ?? '' );
-    if ( ! empty( $attributes['fut_lk_tipologradouro']?->Name ) ) {
-        $logradouro_prefix = trim( $attributes['fut_lk_tipologradouro']->Name );
-
-        if ( ! str_starts_with( strtolower( $logradouro ), strtolower( $logradouro_prefix ) ) ) {
-            $logradouro = $logradouro_prefix . ' ' . $logradouro;
-        }
-    }
-
-    if ( ! empty( $attributes['originatingleadid'] ) ) {
-        $lead_id = $attributes['originatingleadid']->Id;
-    } else {
-        $lead_id = null;
-    }
-
-    $post_meta = [
-        '_ethos_from_crm' => 1,
-        '_ethos_crm_account_id' => $account_id,
-        '_ethos_crm_lead_id' => $lead_id,
-
-        'cnpj' => trim( $attributes['fut_st_cnpjsemmascara'] ?? '' ),
-        'razao_social' => trim( $attributes['fut_st_razaosocial'] ?? '' ),
-        'nome_fantasia' => trim( $attributes['name'] ?? '' ),
-        'segmento' => trim( $attributes['fut_lk_setor']?->Name ?? '' ),
-        'cnae' => sanitize_number( $formatted['fut_lk_cnae'] ?? '' ),
-        'faturamento_anual' => $revenue,
-        'inscricao_estadual' => trim( $attributes['fut_st_inscricaoestadual'] ?? '' ),
-        'inscricao_municipal' => trim( $attributes['fut_st_inscricaomunicipal'] ?? '' ),
-        'logomarca' => $logo,
-        'website' => trim( $attributes['websiteurl'] ?? '' ),
-        'num_funcionarios' => $attributes['numberofemployees'] ?? 0,
-        'porte' => $size,
-        'end_logradouro' => $logradouro,
-        'end_numero' => trim( $attributes['fut_address1_nro'] ?? '' ),
-        'end_complemento' => trim( $attributes['address1_line2'] ?? '' ),
-        'end_bairro' => trim( $attributes['address1_line3'] ?? '' ),
-        'end_cidade' => trim( $attributes['address1_city'] ?? '' ),
-        'end_estado' => $formatted['fut_pl_estado'] ?? '',
-        'end_cep' => sanitize_number( $attributes['address1_postalcode'] ?? '' ),
-    ];
-
-    foreach ( $attributes as $key => $value ) {
-        if ( is_array( $value ) || is_object( $value ) ) {
-            $post_meta['_ethos_crm:' . $key ] = json_encode( $value );
-        } elseif ( ! empty( $value ) || is_numeric( $value ) ) {
-            $post_meta['_ethos_crm:' . $key ] = $value;
-        }
-    }
-
-    return $post_meta;
-}
-
-function parse_contact_into_user_meta( Entity $contact, Entity|null $account ) {
-    $contact_id = $contact->Id;
-    $attributes = $contact->Attributes;
-    $formatted = $contact->FormattedValues;
-
-    $phones = [
-        sanitize_number( $attributes['mobilephone'] ?? '' ),
-        sanitize_number( $attributes['telephone1'] ?? '' ),
-        sanitize_number( $attributes['telephone2'] ?? '' ),
-    ];
-    $phones = array_unique_values( $phones );
-
-    $email = trim( $attributes['emailaddress1'] ?? '@' );
-    if ( ! empty( $account ) && is_subsidiary_company( $account ) ) {
-        $email = generate_unique_email( $email, $account );
-    }
-
-    $user_meta = [
-        '_ethos_from_crm' => 1,
-        '_ethos_crm_account_id' => $attributes['parentcustomerid']?->Id ?? '',
-        '_ethos_crm_contact_id' => $contact_id,
-        '_pmpro_role' => compute_contact_role( $contact ),
-
-        'nome_completo' => trim( $attributes['fullname'] ?? '' ),
-        'cpf' => sanitize_number( $attributes['fut_st_cpf'] ?? '' ),
-        'cargo' => trim( $attributes['jobtitle'] ?? '' ),
-        'area' => trim( $formatted['fut_pl_area'] ?? '' ),
-        'email' => $email,
-        'celular' => $phones[ 0 ] ?? '',
-        'celular_is_whatsapp' => '',
-        'telefone' => $phones[ 1 ] ?? '',
-    ];
-
-    foreach ( $attributes as $key => $value ) {
-        if ( is_array( $value ) || is_object( $value ) ) {
-            $user_meta['_ethos_crm:' . $key ] = json_encode( $value );
-        } elseif ( ! empty( $value ) || is_numeric( $value ) ) {
-            $user_meta['_ethos_crm:' . $key ] = $value;
-        }
-    }
-
-    return $user_meta;
 }
 
 function set_hacklab_as_current_user() {
@@ -335,7 +168,7 @@ function import_account( Entity $account, bool $force_update = false ) {
     $attributes = $account->Attributes;
     $formatted = $account->FormattedValues;
 
-    $post_meta = parse_account_into_post_meta( $account );
+    $post_meta = crm\parse_account_into_post_meta( $account );
 
     if ( is_active_account( $account ) ) {
         cli_log( "Importing account {$post_meta['nome_fantasia']} — {$account->Id}", 'debug' );
@@ -354,7 +187,7 @@ function import_account( Entity $account, bool $force_update = false ) {
     if ( empty( $existing_posts ) ) {
         $post_parent = 0;
 
-        if ( is_subsidiary_company( $account ) ) {
+        if ( crm\is_subsidiary_company( $account ) ) {
             $post_parent = get_account( $attributes['parentaccountid']->Id ) ?? 0;
         }
 
@@ -429,18 +262,19 @@ function get_contact( string $contact_id, string $account_id ) {
 function import_contact( Entity $contact, Entity|null $account = null, bool $force_update = false ) {
     $contact_id = $contact->Id;
 
-    $user_meta = parse_contact_into_user_meta( $contact, $account );
-
-    cli_log( "Importing contact {$user_meta['nome_completo']} — {$contact->Id}", 'debug' );
+    $user_meta = crm\parse_contact_into_user_meta( $contact, $account );
 
     // Don't import users without organization
     if ( empty( $account ) ) {
         if ( is_active_contact( $contact, null ) ) {
             $account = get_account_by_contact( $contact );
         } else {
+            cli_log( "Skipping contact {$user_meta['nome_completo']} — {$contact->Id}", 'debug' );
             return null;
         }
     }
+
+    cli_log( "Importing contact {$user_meta['nome_completo']} — {$contact->Id}", 'debug' );
 
     $existing_users = get_users( [
         'meta_query' => [
