@@ -64,6 +64,7 @@ function csv_add_line( int $user_id, Entity $account ) {
         $recovery_link,
     ] );
 }
+add_action( 'ethos_crm:create_user', 'ethos\\migration\\csv_add_line', 10, 2 );
 
 function csv_finish() {
     global $ethos_crm_csv;
@@ -71,126 +72,11 @@ function csv_finish() {
     fclose( $ethos_crm_csv );
 }
 
-function generate_unique_user_login( string $user_name ) {
-	$login_base = substr( sanitize_title( $user_name ), 0, 60 );
-
-    if ( empty( get_user_by( 'login', $login_base ) ) ) {
-        return $login_base;
-    }
-
-    $i = 2;
-
-    while ( true ) {
-        $login = $login_base . '-' . $i;
-
-        if ( empty( get_user_by( 'login', $login ) ) ) {
-            return $login;
-        }
-
-        $i++;
-    }
-}
-
 function set_hacklab_as_current_user() {
     $user = get_user_by( 'login', 'hacklab' );
     if ( ! empty( $user ) ) {
         wp_set_current_user( $user->ID, $user->user_login );
     }
-}
-
-function import_contact( Entity $contact, Entity|null $account = null, bool $force_update = false ) {
-    $contact_id = $contact->Id;
-
-    $user_meta = crm\parse_contact_into_user_meta( $contact, $account );
-
-    // Don't import users without organization
-    if ( empty( $account ) ) {
-        if ( crm\is_active_contact( $contact, null ) ) {
-            $account = crm\get_account_by_contact( $contact );
-        } else {
-            cli_log( "Skipping contact {$user_meta['nome_completo']} — {$contact->Id}", 'debug' );
-            return null;
-        }
-    }
-
-    cli_log( "Importing contact {$user_meta['nome_completo']} — {$contact->Id}", 'debug' );
-
-    $existing_users = get_users( [
-        'meta_query' => [
-            [ 'key' => '_ethos_crm_account_id', 'value' => $account->Id ],
-            [ 'key' => '_ethos_crm_contact_id', 'value' => $contact_id ],
-        ],
-    ] );
-
-    if ( empty( $existing_users ) ) {
-        $password = wp_generate_password( 16 );
-
-        $existing_user_by_email = get_user_by( 'email', $user_meta['email'] );
-
-        if ( $existing_user_by_email ) {
-            $user_id = wp_update_user([
-                'ID' => $existing_user_by_email->ID,
-                'meta_input' => $user_meta,
-            ]);
-        } else {
-            $user_id = wp_insert_user( [
-                'display_name' => $user_meta['nome_completo'],
-                'user_email' => $user_meta['email'],
-                'user_login' => generate_unique_user_login( $user_meta['nome_completo'] ),
-                'user_pass' => $password,
-                'role' => 'subscriber',
-                'meta_input' => $user_meta,
-            ] );
-
-            if ( empty( $user_id ) ) {
-                return null;
-            } else if ( ! is_wp_error( $user_id ) ) {
-                csv_add_line( $user_id, $account );
-            }
-        }
-
-        if ( is_wp_error( $user_id ) ) {
-            cli_log( $user_id->get_error_message(), 'error' );
-            return null;
-        }
-
-        $post_id = crm\get_post_id_by_account( $account->Id );
-        add_contact_to_organization( $user_id, $post_id );
-
-        cli_log( "Created user with ID = {$user_id}", 'debug' );
-
-        return $user_id;
-    }
-
-    if ( $force_update ) {
-        wp_update_user( [
-            'ID' => $existing_users[0]->ID,
-            'display_name' => $user_meta['nome_completo'],
-            'user_email' => $user_meta['email'],
-            'meta_input' => $user_meta,
-        ] );
-    }
-
-    return $existing_users[0]->ID;
-}
-
-function add_contact_to_organization( int $user_id, int $post_id ) {
-    $existing_group_id = get_user_meta( $user_id, '_pmpro_group', true );
-    if ( ! empty( $existing_group_id ) ) {
-        return (int) $existing_group_id;
-    }
-
-    $group_id = (int) ( get_post_meta( $post_id, '_pmpro_group', true ) ?? 0 );
-
-    if ( ! empty( $group_id ) ) {
-        $membership = \hacklabr\add_user_to_pmpro_group( $user_id, $group_id );
-
-        update_user_meta( $user_id, '_pmpro_group', $group_id );
-
-        \hacklabr\approve_user( $user_id, $membership->group_child_level_id );
-    }
-
-    return $group_id ?: null;
 }
 
 function import_accounts_command( array $args, array $assoc_args ) {
@@ -216,7 +102,7 @@ function import_accounts_command( array $args, array $assoc_args ) {
         foreach( $accounts as $account ) {
             try {
                 \hacklabr\cache_crm_entity( $account );
-                \ethos\crm\import_account( $account, $force_update );
+                crm\import_account( $account, $force_update );
                 $count++;
             } catch ( \Throwable $err ) {
                 cli_log( $err->getMessage(), 'error' );
@@ -237,7 +123,7 @@ function import_accounts_command( array $args, array $assoc_args ) {
         foreach( $contacts as $contact ) {
             try {
                 \hacklabr\cache_crm_entity( $contact );
-                import_contact( $contact, null, $force_update );
+                crm\import_contact( $contact, null, $force_update );
                 $count++;
             } catch ( \Throwable $err ) {
                 cli_log( $err->getMessage(), 'error' );
