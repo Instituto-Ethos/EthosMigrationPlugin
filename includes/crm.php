@@ -5,6 +5,10 @@ namespace ethos\migration;
 use \AlexaCRM\Xrm\Entity;
 use \ethos\crm;
 
+function inside_wp_cli () {
+    return class_exists( '\WP_CLI' );
+}
+
 /**
  * If inside `wp` CLI, prints the message
  *
@@ -12,12 +16,10 @@ use \ethos\crm;
  * @param string $level One of 'debug', 'error', 'log', 'success' or 'warning'
  */
 function cli_log( string $message, string $level = 'log' ) {
-    if ( class_exists( '\WP_CLI' ) ) {
-        if ( $level === 'error' ) {
-            call_user_func( [ \WP_CLI::class, $level ], $message, false );
-        } else {
-            call_user_func( [ \WP_CLI::class, $level ], $message );
-        }
+    if ( $level === 'error' ) {
+        call_user_func( [ \WP_CLI::class, $level ], $message, false );
+    } else {
+        call_user_func( [ \WP_CLI::class, $level ], $message );
     }
 }
 
@@ -64,7 +66,6 @@ function csv_add_line( int $user_id, Entity $account ) {
         $recovery_link,
     ] );
 }
-add_action( 'ethos_crm:create_user', 'ethos\\migration\\csv_add_line', 10, 2 );
 
 function csv_finish() {
     global $ethos_crm_csv;
@@ -137,7 +138,7 @@ function import_accounts_command( array $args, array $assoc_args ) {
 }
 
 function disable_pmpro_emails( $pre, $option ) {
-    if ( class_exists( '\WP_CLI' ) ) {
+    if ( inside_wp_cli() ) {
         if ( str_starts_with( $option, 'pmpro_email_' ) && str_ends_with( $option, '_disabled' ) ) {
             return true;
         }
@@ -172,14 +173,14 @@ function change_password_expiry_time( $expiration ) {
 add_filter( 'password_reset_expiration', 'ethos\\migration\\change_password_expiry_time' );
 
 function register_import_accounts_command() {
-    if ( class_exists( '\WP_CLI' ) ) {
+    if ( inside_wp_cli() ) {
         \WP_CLI::add_command( 'import-accounts', 'ethos\\migration\\import_accounts_command' );
     }
 }
 add_action( 'init', 'ethos\\migration\\register_import_accounts_command' );
 
 function log_message( string $message, string $level = 'debug' ) {
-    if ( class_exists( '\WP_CLI' ) ) {
+    if ( inside_wp_cli() ) {
         cli_log( $message, $level );
     } else {
         error_log( '[' . $level . '] ' . $message, 0 );
@@ -200,3 +201,10 @@ function log_message( string $message, string $level = 'debug' ) {
     do_action( 'logger', $message, $logger_status );
 }
 add_action( 'ethos_crm:log', 'ethos\\migration\\log_message', 10, 2 );
+
+function csv_add_contact( int $user_id, Entity $account ) {
+    if ( inside_wp_cli() ) {
+        csv_add_line( $user_id, $account );
+    }
+}
+add_action( 'ethos_crm:create_user', 'ethos\\migration\\csv_add_contact', 10, 2 );
