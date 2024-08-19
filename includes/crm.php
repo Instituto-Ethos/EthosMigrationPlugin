@@ -84,6 +84,8 @@ function import_accounts_command( array $args, array $assoc_args ) {
     set_hacklab_as_current_user();
     csv_init();
 
+    $sync_start = date_format( date_create( 'now' ), 'Y-m-d\TH:i:sp' );
+
     $parsed_args = wp_parse_args( $assoc_args, [
         'type' => 'all',
         'update' => false,
@@ -132,6 +134,12 @@ function import_accounts_command( array $args, array $assoc_args ) {
         }
 
         cli_log( "Finished importing {$count} contacts.", 'success' );
+    }
+
+    $last_sync = \ethos\crm\get_last_crm_sync();
+
+    if ( $import_type === 'all' && ( empty( $last_sync ) || $sync_start > $last_sync ) ) {
+        \ethos\crm\update_last_crm_sync( $sync_start );
     }
 
     csv_finish();
