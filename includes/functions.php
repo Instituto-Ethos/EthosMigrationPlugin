@@ -193,7 +193,7 @@ function set_events_without_date( $post ) {
     $date = get_post_meta( $post->ID, 'data-do-evento', true );
     if ( ! $date ) {
         echo "\n";
-        echo "Iniciando conversão do post $post->ID \n";        
+        echo "Iniciando conversão do post $post->ID \n";
         create_events_from_cedoc( $post, 'ethos\\factory_fake_date_time' );
     }
 }
@@ -308,6 +308,18 @@ function create_events_from_cedoc( $post, $fn ) {
     } else {
         echo "\n";
         \WP_CLI::warning( "Já existe um evento criado para o Cedoc ID $post->ID\n" );
+    }
+}
+
+/**
+ * Define o termo `cursos` da taxonomia `tribe_events_cat` para o evento com metadado `curso`
+ */
+function set_events_courses( $post ) {
+    $course = get_post_meta( $post->ID, 'curso', true );
+
+    if ( $course ) {
+        $term = get_term_by( 'slug', 'cursos', 'tribe_events_cat' );
+        wp_set_object_terms( $post->ID, $term->term_id, 'tribe_events_cat', true );
     }
 }
 
@@ -666,7 +678,7 @@ function is_event_created( $post_id ) {
 
 /**
  * Aplica filtros padrões do WP no conteúdo do post
- * 
+ *
  * @example wp modify-posts q:post_type=tribe_events fn:ethos\\format_the_content;
  */
 function format_the_content( $post ) {
