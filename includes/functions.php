@@ -324,6 +324,19 @@ function set_events_courses( $post ) {
 }
 
 /**
+ * Define o termo `grupos-de-trabalhos` da taxonomia `tribe_events_cat` para o evento com metadado `curso`
+ */
+function set_grupos_de_trabalhos_term( $post ) {
+    if ( stripos( $post->post_title, 'grupo de trabalho' ) !== false ) {
+        $term = get_term_by( 'slug', 'grupos-de-trabalhos', 'tribe_events_cat' );
+
+        if ( $term ) {
+            wp_set_post_terms( $post->ID, $term->term_id, 'tribe_events_cat', true );
+        }
+    }
+}
+
+/**
  * Formata a data para o padrão do TEC
  */
 function factory_date( $post ) {
