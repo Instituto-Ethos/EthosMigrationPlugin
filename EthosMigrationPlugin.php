@@ -17,7 +17,7 @@ function ethos_plugin_activate() {
 
 register_activation_hook( __FILE__, 'ethos_plugin_activate' );
 
-define( 'ETHOS_MIGRATION_VERSION', '0.5.4' );
+define( 'ETHOS_MIGRATION_VERSION', '0.5.5' );
 define( 'ETHOS_MIGRATION_PATH', plugins_url( '/', __FILE__ ) );
 
 require_once( 'includes/functions.php' );
