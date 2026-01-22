@@ -23,16 +23,19 @@ function cli_log( string $message, string $level = 'log' ) {
     }
 }
 
-function csv_init() {
+function csv_init( string|null $filename = null ) {
     global $ethos_crm_csv;
 
     if ( ! empty( $ethos_crm_csv ) ) {
         csv_finish();
     }
 
-    $date = substr( date_format( date_create( 'now' ), 'c' ), 0, 16 );
+    if (empty($filename)) {
+        $date = substr( date_format( date_create( 'now' ), 'c' ), 0, 16 );
+        $filename = '/imported-contacts-' . $date . '.csv';
+    }
 
-    $ethos_crm_csv = fopen( wp_upload_dir()['basedir'] . '/imported-contacts-' . $date . '.csv', 'w' );
+    $ethos_crm_csv = fopen( wp_upload_dir()['basedir'] . $filename, 'w' );
 
     fputcsv( $ethos_crm_csv, [
         'Contato - ID',
@@ -81,6 +84,9 @@ function set_hacklab_as_current_user() {
 }
 
 function import_accounts_command( array $args, array $assoc_args ) {
+    global $ethos_crm_command;
+    $ethos_crm_command = 'import-accounts';
+
     set_hacklab_as_current_user();
     csv_init();
 
@@ -145,6 +151,63 @@ function import_accounts_command( array $args, array $assoc_args ) {
     csv_finish();
 }
 
+function first_access_command( array $args ) {
+    global $ethos_crm_command;
+    $ethos_crm_command = 'first-access';
+
+    $cnpj = $args[0] ?? '';
+    $cnpj = preg_replace( '/\D/', '', $cnpj );
+    if ( strlen( $cnpj ) !== 14 ) {
+        cli_log( 'Invalid CNPJ number', 'error' );
+        return;
+    }
+
+    set_hacklab_as_current_user();
+    csv_init( '/first-access-' . $cnpj . '.csv' );
+
+    $accounts = \hacklabr\iterate_crm_entities( 'account', [
+        'filters' => [
+            'fut_st_cnpjsemmascara' => $cnpj,
+        ],
+    ] );
+
+    $count = 0;
+
+    foreach ( $accounts as $account ) {
+        try {
+            \hacklabr\cache_crm_entity( $account );
+            crm\import_account( $account, true );
+        } catch ( \Throwable $err ) {
+            cli_log( $err->getMessage(), 'error' );
+        }
+
+        $contacts = \hacklabr\iterate_crm_entities( 'contact', [
+            'filters' => [
+                'accountid' => $account->Id,
+            ],
+        ] );
+
+        foreach ( $contacts as $contact ) {
+            try {
+                \hacklabr\cache_crm_entity( $contact );
+                crm\import_contact( $contact, $account, true );
+
+                $user_id = crm\get_contact( $contact->Id, $account->Id );
+                if ( $user_id ) {
+                    csv_add_contact( $user_id, $account );
+                    $count++;
+                }
+            } catch ( \Throwable $err ) {
+                cli_log( $err->getMessage(), 'error' );
+            }
+        }
+    }
+
+    cli_log( "Finished importing {$count} contacts.", 'success' );
+
+    csv_finish();
+}
+
 function disable_pmpro_emails( $pre, $option ) {
     if ( inside_wp_cli() ) {
         if ( str_starts_with( $option, 'pmpro_email_' ) && str_ends_with( $option, '_disabled' ) ) {
@@ -180,6 +243,13 @@ function change_password_expiry_time( $expiration ) {
 }
 add_filter( 'password_reset_expiration', 'ethos\\migration\\change_password_expiry_time' );
 
+function register_first_access_command() {
+    if ( inside_wp_cli() ) {
+        \WP_CLI::add_command( 'first-access', 'ethos\\migration\\first_access_command' );
+    }
+}
+add_action( 'init', 'ethos\\migration\\register_first_access_command' );
+
 function register_import_accounts_command() {
     if ( inside_wp_cli() ) {
         \WP_CLI::add_command( 'import-accounts', 'ethos\\migration\\import_accounts_command' );
@@ -212,7 +282,10 @@ add_action( 'ethos_crm:log', 'ethos\\migration\\log_message', 10, 2 );
 
 function csv_add_contact( int $user_id, Entity $account ) {
     if ( inside_wp_cli() ) {
-        csv_add_line( $user_id, $account );
+        global $ethos_crm_command;
+        if (!empty($ethos_crm_command) && $ethos_crm_command === 'import-accounts') {
+            csv_add_line( $user_id, $account );
+        }
     }
 }
 add_action( 'ethos_crm:create_user', 'ethos\\migration\\csv_add_contact', 10, 2 );
