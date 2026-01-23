@@ -196,6 +196,10 @@ function first_access_command( array $args ) {
                 if ( $user_id ) {
                     csv_add_line( $user_id, $account );
                     $count++;
+
+                    if ( ( $count % 10 ) == 0 ) {
+                        cli_log( "Imported {$count} contacts..." );
+                    }
                 }
             } catch ( \Throwable $err ) {
                 cli_log( $err->getMessage(), 'error' );
