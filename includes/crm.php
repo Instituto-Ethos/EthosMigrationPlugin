@@ -237,6 +237,16 @@ add_filter( 'pmpro_wp_new_user_notification', 'ethos\\migration\\disable_wp_emai
 add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\migration\\disable_wp_emails', 20, 2 );
 add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\migration\\disable_wp_emails', 20, 2 );
 
+function disable_user_update_email( bool $send ): bool {
+    if (inside_wp_cli()) {
+        return false;
+    }
+
+    return $send;
+}
+add_filter( 'send_email_change_email', 'ethos\\migration\\disable_user_update_email', 20, 1 );
+add_filter( 'send_password_change_email', 'ethos\\migration\\disable_user_update_email', 20, 1 );
+
 function change_password_expiry_time( $expiration ) {
     $diff = strtotime( '2024-10-01' ) - time();
     return max( $diff, $expiration );
@@ -283,7 +293,7 @@ add_action( 'ethos_crm:log', 'ethos\\migration\\log_message', 10, 2 );
 function csv_add_contact( int $user_id, Entity $account ) {
     if ( inside_wp_cli() ) {
         global $ethos_crm_command;
-        if (!empty($ethos_crm_command) && $ethos_crm_command === 'import-accounts') {
+        if ( ! empty( $ethos_crm_command ) && $ethos_crm_command === 'import-accounts' ) {
             csv_add_line( $user_id, $account );
         }
     }
