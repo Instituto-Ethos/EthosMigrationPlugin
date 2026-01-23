@@ -194,7 +194,7 @@ function first_access_command( array $args ) {
 
                 $user_id = crm\get_contact( $contact->Id, $account->Id );
                 if ( $user_id ) {
-                    csv_add_contact( $user_id, $account );
+                    csv_add_line( $user_id, $account );
                     $count++;
                 }
             } catch ( \Throwable $err ) {
