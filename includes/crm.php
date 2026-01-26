@@ -251,9 +251,8 @@ function disable_user_update_email( bool $send ): bool {
 add_filter( 'send_email_change_email', 'ethos\\migration\\disable_user_update_email', 20, 1 );
 add_filter( 'send_password_change_email', 'ethos\\migration\\disable_user_update_email', 20, 1 );
 
-function change_password_expiry_time( $expiration ) {
-    $diff = strtotime( '2024-10-01' ) - time();
-    return max( $diff, $expiration );
+function change_password_expiry_time( int $expiration ): int {
+    return 60 * \DAY_IN_SECONDS;
 }
 add_filter( 'password_reset_expiration', 'ethos\\migration\\change_password_expiry_time' );
 
