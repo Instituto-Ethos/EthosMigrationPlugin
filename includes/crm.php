@@ -268,12 +268,12 @@ function first_access_v2_command() {
         $cnpj = $attributes['fut_st_cnpjsemmascara'] ?? '';
 
         if ( empty( $cnpj ) || in_array( $cnpj, $skipped_cnpjs ) ) {
-            cli_log( "Skipping {$account_name} ({$account->Id})...");
+            cli_log( "Skipped «{$account_name}» ({$account->Id})...");
             continue;
         }
 
         try {
-            cli_log( "Importing {$account_name} ({$account->Id})...");
+            cli_log( "Checking «{$account_name}» ({$account->Id})...");
             \hacklabr\cache_crm_entity( $account );
             crm\import_account( $account, true );
         } catch ( \Throwable $err ) {
