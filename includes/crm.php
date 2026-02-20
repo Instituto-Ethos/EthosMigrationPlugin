@@ -263,7 +263,7 @@ function first_access_v2_command() {
         'order' => 'ASC',
     ] );
 
-    $count = 0;
+    $total_count = 0;
 
     foreach ( $accounts as $account ) {
         $attributes = $account->Attributes;
@@ -289,6 +289,8 @@ function first_access_v2_command() {
             ],
         ] );
 
+        $current_count = 0;
+
         foreach ( $contacts as $contact ) {
             try {
                 \hacklabr\cache_crm_entity( $contact );
@@ -297,19 +299,18 @@ function first_access_v2_command() {
                 $user_id = crm\get_contact( $contact->Id, $account->Id );
                 if ( $user_id ) {
                     csv_add_line( $user_id, $account );
-                    $count++;
-
-                    if ( ( $count % 10 ) == 0 ) {
-                        cli_log( "Imported {$count} contacts..." );
-                    }
+                    $current_count++;
+                    $total_count++;
                 }
             } catch ( \Throwable $err ) {
                 cli_log( $err->getMessage(), 'error' );
             }
         }
+
+        cli_log( "Imported more {$current_count} contacts (of {$total_count} total)." );
     }
 
-    cli_log( "Finished importing {$count} contacts.", 'success' );
+    cli_log( "Finished importing {$total_count} contacts.", 'success' );
 
     csv_finish();
 }
