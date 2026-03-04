@@ -256,9 +256,6 @@ function first_access_v2_command() {
     ];
 
     $accounts = \hacklabr\iterate_crm_entities( 'account', [
-        'filters' => [
-            'fut_pl_associacao' => 969830000, // Associado
-        ],
         'orderby' => 'name',
         'order' => 'ASC',
     ] );
@@ -266,6 +263,10 @@ function first_access_v2_command() {
     $total_count = 0;
 
     foreach ( $accounts as $account ) {
+        if ( ! crm\is_active_account( $account ) ) {
+            continue;
+        }
+
         $attributes = $account->Attributes;
         $account_name = $attributes['name'] ?? '';
         $cnpj = $attributes['fut_st_cnpjsemmascara'] ?? '';
@@ -275,12 +276,19 @@ function first_access_v2_command() {
             continue;
         }
 
+        $post_id = null;
+
         try {
             cli_log( "Updating {$account_name} ({$account->Id})...");
             \hacklabr\cache_crm_entity( $account );
-            crm\import_account( $account, true );
+            $post_id = crm\import_account( $account, true );
         } catch ( \Throwable $err ) {
             cli_log( $err->getMessage(), 'error' );
+        }
+
+        if ( empty( $post_id ) || empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
+            cli_log( "Skipped contacts due to lack of primary contact." );
+            continue;
         }
 
         $contacts = \hacklabr\iterate_crm_entities( 'contact', [
