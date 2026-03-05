@@ -312,10 +312,8 @@ function first_access_v2_command() {
                     $total_count++;
                 }
             } catch ( \Throwable $err ) {
-                cli_log( var_export( [
-                    'contact' => $contact->Id,
-                    'message' => $err->getMessage(),
-                ], true ), 'error' );
+                $contact_name = $contact->Attributes['fullname'] ?? '';
+                cli_log( "\tErro ao importar {$contact_name} ({$contact->Id}): {$err->getMessage()}", 'error' );
                 $current_errors++;
                 $total_errors++;
             }
