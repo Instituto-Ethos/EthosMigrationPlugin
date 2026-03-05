@@ -261,6 +261,7 @@ function first_access_v2_command() {
     ] );
 
     $total_count = 0;
+    $total_errors = 0;
 
     foreach ( $accounts as $account ) {
         if ( ! crm\is_active_account( $account ) ) {
@@ -297,6 +298,7 @@ function first_access_v2_command() {
         ] );
 
         $current_count = 0;
+        $current_errors = 0;
 
         foreach ( $contacts as $contact ) {
             try {
@@ -310,14 +312,22 @@ function first_access_v2_command() {
                     $total_count++;
                 }
             } catch ( \Throwable $err ) {
-                cli_log( $err->getMessage(), 'error' );
+                cli_log( var_export( [
+                    'contact' => $contact->Id,
+                    'message' => $err->getMessage(),
+                ], true ), 'error' );
+                $current_errors++;
+                $total_errors++;
             }
         }
 
-        cli_log( "Imported more {$current_count} contacts (of {$total_count} total)." );
+        cli_log( "\tImported more {$current_count} contacts (of {$total_count} total)." );
+        if ( $current_errors > 0 ) {
+            cli_log( "\tFound more {$current_errors} errors (of {$total_errors} total)." );
+        }
     }
 
-    cli_log( "Finished importing {$total_count} contacts.", 'success' );
+    cli_log( "Finished importing {$total_count} contacts, with {$total_errors} errors.", 'success' );
 
     csv_finish();
 }
