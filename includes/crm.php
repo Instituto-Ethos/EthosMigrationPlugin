@@ -288,7 +288,7 @@ function first_access_v2_command() {
         }
 
         if ( empty( $post_id ) || empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
-            cli_log( "Could not find primary contact." );
+            cli_log( "\tCould not find primary contact." );
         }
 
         $contacts = \hacklabr\iterate_crm_entities( 'contact', [
