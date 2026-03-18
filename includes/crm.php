@@ -330,6 +330,51 @@ function first_access_v2_command() {
     csv_finish();
 }
 
+function first_access_account_command( array $args ) {
+    global $ethos_crm_command;
+    $ethos_crm_command = 'first-access';
+
+    $account_id = $args[0];
+    $current_contact = '';
+
+    set_error_handler(function (...$params) use ($current_contact) {
+        do_action('logger', $params, 'error');
+        do_action('logger', $current_contact, 'error');
+    }, E_ALL);
+
+    set_hacklab_as_current_user();
+
+    $account = \hacklabr\get_crm_entity_by_id( 'account', $account_id );
+
+    try {
+        crm\import_account( $account, true );
+    } catch ( \Throwable $err ) {
+        cli_log( $err->getMessage(), 'error' );
+    }
+
+    crm\import_account( $account, true );
+
+    $contacts = \hacklabr\iterate_crm_entities( 'contact', [
+        'filters' => [
+            'accountid' => $account_id,
+        ],
+    ] );
+
+    foreach ( $contacts as $contact ) {
+        try {
+            $current_contact = trim( $contact->Attributes['emailaddress1'] ?? '' );
+            if ( $current_contact ) {
+                cli_log( $current_contact );
+            }
+
+            crm\import_contact( $contact, $account, true );
+            crm\get_contact( $contact->Id, $account->Id );
+        } catch ( \Throwable $err ) {
+            cli_log( $err->getMessage(), 'error' );
+        }
+    }
+}
+
 function disable_pmpro_emails( $pre, $option ) {
     if ( inside_wp_cli() ) {
         if ( str_starts_with( $option, 'pmpro_email_' ) && str_ends_with( $option, '_disabled' ) ) {
@@ -378,6 +423,7 @@ function register_first_access_command() {
     if ( inside_wp_cli() ) {
         \WP_CLI::add_command( 'first-access', 'ethos\\migration\\first_access_command' );
         \WP_CLI::add_command( 'first-access-v2', 'ethos\\migration\\first_access_v2_command' );
+        \WP_CLI::add_command( 'first-access-account', 'ethos\\migration\\first_access_account_command' );
     }
 }
 add_action( 'init', 'ethos\\migration\\register_first_access_command' );
@@ -408,7 +454,9 @@ function log_message( string $message, string $level = 'debug' ) {
             break;
     }
 
-    do_action( 'logger', $message, $logger_status );
+    if ( $logger_status !== 'info' ) {
+        do_action( 'logger', $message, $logger_status );
+    }
 }
 add_action( 'ethos_crm:log', 'ethos\\migration\\log_message', 10, 2 );
 
