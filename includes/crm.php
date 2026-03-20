@@ -134,6 +134,10 @@ function import_accounts_command( array $args, array $assoc_args ) {
         $count = 0;
 
         foreach( $contacts as $contact ) {
+            if ( ! crm\is_active_contact( $contact ) ) {
+                continue;
+            }
+
             try {
                 \hacklabr\cache_crm_entity( $contact );
                 crm\import_contact( $contact, null, $force_update );
@@ -192,6 +196,10 @@ function first_access_command( array $args ) {
         ] );
 
         foreach ( $contacts as $contact ) {
+            if ( ! crm\is_active_contact( $contact, $account ) ) {
+                continue;
+            }
+
             try {
                 \hacklabr\cache_crm_entity( $contact );
                 crm\import_contact( $contact, $account, true );
@@ -301,6 +309,10 @@ function first_access_v2_command() {
         $current_errors = 0;
 
         foreach ( $contacts as $contact ) {
+            if ( ! crm\is_active_account( $account, $contact ) ) {
+                continue;
+            }
+
             try {
                 \hacklabr\cache_crm_entity( $contact );
                 crm\import_contact( $contact, $account, true );
