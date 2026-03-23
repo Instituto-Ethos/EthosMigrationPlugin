@@ -397,6 +397,10 @@ function first_access_v3_command() {
     $total_errors = 0;
 
     foreach ( $accounts as $account ) {
+        $attributes = $account->Attributes;
+        $account_name = $attributes['name'] ?? '';
+        $cnpj = $attributes['fut_st_cnpjsemmascara'] ?? '';
+
         if ( ! crm\is_active_account( $account ) ) {
             $account_status = $account->FormattedValues['fut_pl_associacao'] ?? '';
 
@@ -427,10 +431,6 @@ function first_access_v3_command() {
 
             continue;
         }
-
-        $attributes = $account->Attributes;
-        $account_name = $attributes['name'] ?? '';
-        $cnpj = $attributes['fut_st_cnpjsemmascara'] ?? '';
 
         if ( in_array( $cnpj, $skipped_cnpjs ) ) {
             cli_log( "Skipping {$account_name} ({$account->Id})...");
