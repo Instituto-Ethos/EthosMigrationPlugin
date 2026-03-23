@@ -113,6 +113,10 @@ function import_accounts_command( array $args, array $assoc_args ) {
         $count = 0;
 
         foreach( $accounts as $account ) {
+            if ( ! crm\is_active_account( $account ) ) {
+                continue;
+            }
+
             try {
                 \hacklabr\cache_crm_entity( $account );
                 crm\import_account( $account, $force_update );
@@ -309,7 +313,191 @@ function first_access_v2_command() {
         $current_errors = 0;
 
         foreach ( $contacts as $contact ) {
-            if ( ! crm\is_active_account( $account, $contact ) ) {
+            if ( ! crm\is_active_contact( $contact, $account ) ) {
+                continue;
+            }
+
+            try {
+                \hacklabr\cache_crm_entity( $contact );
+                crm\import_contact( $contact, $account, true );
+
+                $user_id = crm\get_contact( $contact->Id, $account->Id );
+                if ( $user_id ) {
+                    csv_add_line( $user_id, $account );
+                    $current_count++;
+                    $total_count++;
+                }
+            } catch ( \Throwable $err ) {
+                $contact_name = $contact->Attributes['fullname'] ?? '';
+                cli_log( "\tErro ao importar {$contact_name} ({$contact->Id}): {$err->getMessage()}", 'error' );
+                $current_errors++;
+                $total_errors++;
+            }
+        }
+
+        cli_log( "\tImported more {$current_count} contacts (of {$total_count} total)." );
+        if ( $current_errors > 0 ) {
+            cli_log( "\tFound more {$current_errors} errors (of {$total_errors} total)." );
+        }
+    }
+
+    cli_log( "Finished importing {$total_count} contacts, with {$total_errors} errors.", 'success' );
+
+    csv_finish();
+}
+
+function first_access_v3_command() {
+    // Required for using `wp_delete_user` function
+    require_once( ABSPATH . 'wp-admin/includes/user.php' );
+
+    global $ethos_crm_command;
+    $ethos_crm_command = 'first-access';
+
+    set_hacklab_as_current_user();
+    csv_init();
+
+    $skipped_cnpjs = [
+        // ALLIA HIGIENE
+        '25983227000125',
+        // ALSTOM BRASIL ENERGIA E TRANSPORTE LTDA
+        '88309620000158',
+        '88309620000662',
+        // ASSAÍ ATACADISTA
+        '06057223000171',
+        // BANCO DO BRASIL S.A.
+        '00000000000191',
+        // DANIEL ADVOGADOS
+        '33073800000434',
+        // FEDERAÇÃO DAS INDÚSTRIAS DO ESTADO DO RIO DE JANEIRO - FIRJAN
+        '42422212000107',
+        // RIO ÔNIBUS - SINDICATO DAS EMPRESAS DE ÔNIBUS DA CIDADE DO RIO DE JANEIRO
+        '33927872000159',
+        // TECHINT ENGENHARIA E CONSTRUÇÃO S/A
+        '61575775000180',
+        // INTEX BANK BANCO DE CAMBIO S.A.
+        '02992317000187',
+        // ISA ENERGIA BRASIL S.A
+        '02998611000104',
+        // OPERADOR NACIONAL DO SISTEMA ELÉTRICO
+        '02831210000238',
+        // BOCA ROSA COMPANY LTDA
+        '22694602000129',
+        // LIGA INDEPENDENTE DO GRUPO A - RIO DE JANEIRO
+        '28326598000122',
+        // EQUATORIAL ENERGIA S/A
+        '03220438000173',
+    ];
+
+    $accounts = \hacklabr\iterate_crm_entities( 'account', [
+        'orderby' => 'name',
+        'order' => 'ASC',
+    ] );
+
+    $total_count = 0;
+    $total_errors = 0;
+
+    foreach ( $accounts as $account ) {
+        if ( ! crm\is_active_account( $account ) ) {
+            $account_status = $account->FormattedValues['fut_pl_associacao'] ?? '';
+
+            if ( in_array( $account_status, ['Associado', 'Grupo Econômico'] ) ) {
+                $post_ids = get_posts( [
+                    'post_type' => 'organizacao',
+                    'meta_query' => [
+                        [ 'key' => '_ethos_crm_account_id', 'value' => $account->Id ],
+                    ],
+                    'fields' => 'ids',
+                ] );
+
+                foreach ( $post_ids as $post_id ) {
+                    wp_delete_post( $post_id, true );
+                    cli_log( "Deleted account {$account_name} ({$account->Id})...");
+                }
+
+                $users = get_users( [
+                    'meta_query' => [
+                        [ 'key' => '_ethos_crm_account_id', 'value' => $account->Id ],
+                    ],
+                ] );
+
+                foreach ( $users as $user ) {
+                    wp_delete_user( $user->ID, null );
+                }
+            }
+
+            continue;
+        }
+
+        $attributes = $account->Attributes;
+        $account_name = $attributes['name'] ?? '';
+        $cnpj = $attributes['fut_st_cnpjsemmascara'] ?? '';
+
+        if ( in_array( $cnpj, $skipped_cnpjs ) ) {
+            cli_log( "Skipping {$account_name} ({$account->Id})...");
+
+            $contacts = \hacklabr\iterate_crm_entities( 'contact', [
+                'filters' => [
+                    'accountid' => $account->Id,
+                ],
+            ] );
+
+            foreach ( $contacts as $contact ) {
+                if ( ! crm\is_active_contact( $contact, $account ) ) {
+                    $users = get_users( [
+                        'meta_query' => [
+                            [ 'key' => '_ethos_crm_contact_id', 'value' => $contact->Id ],
+                        ],
+                    ] );
+
+                    foreach ( $users as $user ) {
+                        wp_delete_user( $user->ID, null );
+                    }
+                }
+            }
+
+            continue;
+        }
+
+        if ( empty( $cnpj ) ) {
+            cli_log( "Skipped {$account_name} ({$account->Id})...");
+            continue;
+        }
+
+        $post_id = null;
+
+        try {
+            cli_log( "Updating {$account_name} ({$account->Id})...");
+            \hacklabr\cache_crm_entity( $account );
+            $post_id = crm\import_account( $account, true );
+        } catch ( \Throwable $err ) {
+            cli_log( $err->getMessage(), 'error' );
+        }
+
+        if ( empty( $post_id ) || empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
+            cli_log( "\tCould not find primary contact." );
+        }
+
+        $contacts = \hacklabr\iterate_crm_entities( 'contact', [
+            'filters' => [
+                'accountid' => $account->Id,
+            ],
+        ] );
+
+        $current_count = 0;
+        $current_errors = 0;
+
+        foreach ( $contacts as $contact ) {
+            if ( ! crm\is_active_contact( $contact, $account ) ) {
+                $users = get_users( [
+                    'meta_query' => [
+                        [ 'key' => '_ethos_crm_contact_id', 'value' => $contact->Id ],
+                    ],
+                ] );
+
+                foreach ( $users as $user ) {
+                    wp_delete_user( $user->ID, null );
+                }
+
                 continue;
             }
 
@@ -390,6 +578,7 @@ function register_first_access_command() {
     if ( inside_wp_cli() ) {
         \WP_CLI::add_command( 'first-access', 'ethos\\migration\\first_access_command' );
         \WP_CLI::add_command( 'first-access-v2', 'ethos\\migration\\first_access_v2_command' );
+        \WP_CLI::add_command( 'first-access-v3', 'ethos\\migration\\first_access_v3_command' );
     }
 }
 add_action( 'init', 'ethos\\migration\\register_first_access_command' );
