@@ -467,6 +467,7 @@ function first_access_v3_command() {
 
         try {
             cli_log( "Updating {$account_name} ({$account->Id})...");
+            \hacklabr\forget_cached_crm_entity( 'account', $account->Id );
             \hacklabr\cache_crm_entity( $account );
             $post_id = crm\import_account( $account, true );
         } catch ( \Throwable $err ) {
@@ -502,6 +503,7 @@ function first_access_v3_command() {
             }
 
             try {
+                \hacklabr\forget_cached_crm_entity( 'contact', $contact->Id );
                 \hacklabr\cache_crm_entity( $contact );
                 crm\import_contact( $contact, $account, true );
 
