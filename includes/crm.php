@@ -188,7 +188,11 @@ function first_access_command( array $args ) {
     foreach ( $accounts as $account ) {
         try {
             \hacklabr\cache_crm_entity( $account );
-            crm\import_account( $account, true );
+            $post_id = crm\import_account( $account, true );
+
+            if ( empty( $post_id ) || empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
+                cli_log( "\tCould not find primary contact." );
+            }
         } catch ( \Throwable $err ) {
             cli_log( $err->getMessage(), 'error' );
         }
