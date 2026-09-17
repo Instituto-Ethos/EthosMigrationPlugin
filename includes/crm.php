@@ -530,6 +530,115 @@ function first_access_v3_command() {
     csv_finish();
 }
 
+function incremental_migration_command() {
+    global $ethos_crm_command;
+    $ethos_crm_command = 'incremental-migration';
+
+    set_hacklab_as_current_user();
+    csv_init();
+
+    $accounts = \hacklabr\iterate_crm_entities( 'account', [
+        'filters' => [
+            'statecode' => 0 /* Active */,
+        ],
+        'orderby' => 'name',
+        'order' => 'ASC',
+    ] );
+
+    $active_account_ids = [];
+
+    $total_count = 0;
+    $total_errors = 0;
+
+    foreach ( $accounts as $account ) {
+        if ( ! crm\is_active_account( $account ) ) {
+            continue;
+        }
+
+        $attributes = $account->Attributes;
+        $account_id = $account->Id;
+        $account_name = $attributes['name'] ?? '';
+        $cnpj = $attributes['fut_st_cnpjsemmascara'] ?? '';
+
+        $active_account_ids[] = $account_id;
+
+        if ( empty( $cnpj ) ) {
+            cli_log( "Skipped {$account_name} ({$account_id}), because of blank CNPJ..." );
+            continue;
+        }
+
+        $post_id = null;
+
+        try {
+            $existing_post = get_single_post( [
+                'post_type' => 'organizacao',
+                'meta_query' => [
+                    [ 'key' => '_ethos_crm_account_id', 'value' => $account_id ],
+                ],
+            ] );
+
+            if ( empty( $existing_post ) ) {
+                cli_log( "Creating {$account_name} ({$account_id})...");
+                \hacklabr\cache_crm_entity( $account );
+                $post_id = crm\create_from_account( $account );
+            } else {
+                cli_log( "Skipping {$account_name} ({$account_id})..." );
+                continue;
+            }
+        } catch ( \Throwable $err ) {
+            cli_log( $err->getMessage(), 'error' );
+        }
+
+        if ( empty( $post_id ) || empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
+            cli_log( "\tCould not find primary contact." );
+        }
+
+        $contacts = \hacklabr\iterate_crm_entities( 'contact', [
+            'filters' => [
+                'accountid' => $account_id,
+            ],
+        ] );
+
+        $current_count = 0;
+        $current_errors = 0;
+
+        foreach ( $contacts as $contact ) {
+            if ( ! crm\is_active_contact( $contact, $account ) ) {
+                continue;
+            }
+
+            try {
+                \hacklabr\forget_cached_crm_entity( 'contact', $contact->Id );
+                \hacklabr\cache_crm_entity( $contact );
+                crm\import_contact( $contact, $account, true );
+
+                $user_id = crm\get_contact( $contact->Id, $account_id );
+                if ( $user_id ) {
+                    csv_add_line( $user_id, $account );
+                    $current_count++;
+                    $total_count++;
+                }
+            } catch ( \Throwable $err ) {
+                $contact_name = $contact->Attributes['fullname'] ?? '';
+                cli_log( "\tErro ao importar {$contact_name} ({$contact->Id}): {$err->getMessage()}", 'error' );
+                $current_errors++;
+                $total_errors++;
+            }
+        }
+
+        cli_log( "\tImported more {$current_count} contacts (of {$total_count} total)." );
+        if ( $current_errors > 0 ) {
+            cli_log( "\tFound more {$current_errors} errors (of {$total_errors} total)." );
+        }
+    }
+
+    cli_log( "Finished importing {$total_count} contacts, with {$total_errors} errors.", 'success' );
+
+    \ethos\remove_inactive_accounts( $active_account_ids );
+
+    csv_finish();
+}
+
 function disable_pmpro_emails( $pre, $option ) {
     if ( inside_wp_cli() ) {
         if ( str_starts_with( $option, 'pmpro_email_' ) && str_ends_with( $option, '_disabled' ) ) {
@@ -586,6 +695,7 @@ add_action( 'init', 'ethos\\migration\\register_first_access_command' );
 function register_import_accounts_command() {
     if ( inside_wp_cli() ) {
         \WP_CLI::add_command( 'import-accounts', 'ethos\\migration\\import_accounts_command' );
+        \WP_CLI::add_command( 'incremental-migration', 'ethos\\migration\\incremental_migration_command' );
     }
 }
 add_action( 'init', 'ethos\\migration\\register_import_accounts_command' );
