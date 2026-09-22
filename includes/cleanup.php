@@ -24,17 +24,17 @@ function remove_inactive_accounts( array $active_account_ids ): void {
         $post_account = get_post_meta( $post->ID, '_ethos_crm_account_id', true );
 
         if ( empty( $accounts_map[ $post_account ] ) ) {
-            migration\cli_log( "Removing {$post->post_title} ({$post_account})..." );
+            migration\log_message( "Removing {$post->post_title} ({$post_account})..." );
 
             try {
                 crm\delete_from_account( $post );
                 $total_count++;
             } catch ( \Exception $err ) {
-                migration\cli_log( $err->getMessage(), 'error' );
+                migration\log_message( $err->getMessage(), 'error' );
                 $total_errors++;
             }
         }
     }
 
-    migration\cli_log( "Finished removing {$total_count} accounts, with {$total_errors} errors.", 'success' );
+    migration\log_message( "Finished removing {$total_count} accounts, with {$total_errors} errors.", 'success' );
 }

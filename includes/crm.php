@@ -562,7 +562,7 @@ function incremental_migration_command() {
         $active_account_ids[] = $account_id;
 
         if ( empty( $cnpj ) ) {
-            cli_log( "Skipped {$account_name} ({$account_id}), because of blank CNPJ..." );
+            log_message( "Skipped {$account_name} ({$account_id}), because of blank CNPJ..." );
             continue;
         }
 
@@ -577,25 +577,25 @@ function incremental_migration_command() {
             ] );
 
             if ( empty( $existing_post ) ) {
-                cli_log( "Creating {$account_name} ({$account_id})...");
+                log_message( "Creating {$account_name} ({$account_id})...");
                 \hacklabr\cache_crm_entity( $account );
                 $post_id = crm\create_from_account( $account );
             } else {
-                cli_log( "Updating {$account_name} ({$account_id})..." );
+                log_message( "Updating {$account_name} ({$account_id})..." );
                 \hacklabr\cache_crm_entity( $account );
                 $post_id = crm\update_from_account( $account, $existing_post );
             }
         } catch ( \Throwable $err ) {
-            cli_log( $err->getMessage(), 'error' );
+            log_message( $err->getMessage(), 'error' );
         }
 
         if ( is_wp_error( $post_id ) ) {
-            cli_log( "\t" . $post_id->get_error_message(), 'error' );
+            log_message( "\t" . $post_id->get_error_message(), 'error' );
             continue;
         }
 
         if ( empty( $post_id ) || empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
-            cli_log( "\tCould not find primary contact." );
+            log_message( "\tCould not find primary contact." );
         }
 
         $contacts = \hacklabr\iterate_crm_entities( 'contact', [
@@ -619,19 +619,19 @@ function incremental_migration_command() {
                 }
             } catch ( \Throwable $err ) {
                 $contact_name = $contact->Attributes['fullname'] ?? '';
-                cli_log( "\tErro ao importar {$contact_name} ({$contact->Id}): {$err->getMessage()}", 'error' );
+                log_message( "\tErro ao importar {$contact_name} ({$contact->Id}): {$err->getMessage()}", 'error' );
                 $current_errors++;
                 $total_errors++;
             }
         }
 
-        cli_log( "\tImported more {$current_count} contacts (of {$total_count} total)." );
+        log_message( "\tImported more {$current_count} contacts (of {$total_count} total)." );
         if ( $current_errors > 0 ) {
-            cli_log( "\tFound more {$current_errors} errors (of {$total_errors} total)." );
+            log_message( "\tFound more {$current_errors} errors (of {$total_errors} total)." );
         }
     }
 
-    cli_log( "Finished importing {$total_count} contacts, with {$total_errors} errors.", 'success' );
+    log_message( "Finished importing {$total_count} contacts, with {$total_errors} errors.", 'success' );
 
     \ethos\remove_inactive_accounts( $active_account_ids );
 }
