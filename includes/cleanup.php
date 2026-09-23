@@ -2,10 +2,18 @@
 
 namespace ethos;
 
-function remove_inactive_accounts( array $active_account_ids ): void {
+function remove_inactive_accounts( array $active_account_ids ): array {
+    if ( empty( $active_account_ids ) ) {
+        migration\log_message( 'Cleanup aborted: active account list is empty.', 'error' );
+        return [
+            'removed' => 0,
+            'errors' => 1,
+        ];
+    }
+
     $accounts_map = [];
     foreach ( $active_account_ids as $account_id ) {
-        $accounts_map[ $account_id ] = true;
+        $accounts_map[ strtolower( (string) $account_id ) ] = true;
     }
 
     $synced_posts = get_posts( [
@@ -21,7 +29,7 @@ function remove_inactive_accounts( array $active_account_ids ): void {
     $total_errors = 0;
 
     foreach ( $synced_posts as $post ) {
-        $post_account = get_post_meta( $post->ID, '_ethos_crm_account_id', true );
+        $post_account = strtolower( (string) get_post_meta( $post->ID, '_ethos_crm_account_id', true ) );
 
         if ( empty( $accounts_map[ $post_account ] ) ) {
             migration\log_message( "Removing {$post->post_title} ({$post_account})..." );
@@ -37,4 +45,9 @@ function remove_inactive_accounts( array $active_account_ids ): void {
     }
 
     migration\log_message( "Finished removing {$total_count} accounts, with {$total_errors} errors.", 'success' );
+
+    return [
+        'removed' => $total_count,
+        'errors' => $total_errors,
+    ];
 }

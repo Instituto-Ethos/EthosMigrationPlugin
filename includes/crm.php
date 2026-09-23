@@ -530,9 +530,24 @@ function first_access_v3_command() {
     csv_finish();
 }
 
-function incremental_migration_command() {
-    global $ethos_crm_command;
+/**
+ * Usage: wp incremental-migration [--force]
+ *
+ * --force ignores the _ethos_crm:modifiedon markers and re-syncs everything.
+ */
+function incremental_migration_command( array $args = [], array $assoc_args = [] ) {
+    global $ethos_crm_command, $ethos_migration_log_file;
     $ethos_crm_command = 'incremental-migration';
+
+    $parsed_args = wp_parse_args( $assoc_args, [ 'force' => false ] );
+    $force_update = (bool) $parsed_args['force'];
+
+    if ( empty( $ethos_migration_log_file ) ) {
+        $ethos_migration_log_file = open_migration_log();
+    }
+
+    $run_started_datetime = current_datetime();
+    $run_started_at = microtime( true );
 
     set_hacklab_as_current_user();
 
@@ -546,12 +561,18 @@ function incremental_migration_command() {
 
     $active_account_ids = [];
 
+    $processed_accounts = 0;
     $total_count = 0;
     $total_errors = 0;
 
     foreach ( $accounts as $account ) {
         if ( ! crm\is_active_account( $account ) ) {
             continue;
+        }
+
+        $processed_accounts++;
+        if ( 0 === $processed_accounts % 50 ) {
+            crm\free_runtime_memory();
         }
 
         $attributes = $account->Attributes;
@@ -562,39 +583,25 @@ function incremental_migration_command() {
         $active_account_ids[] = $account_id;
 
         if ( empty( $cnpj ) ) {
-            log_message( "Skipped {$account_name} ({$account_id}), because of blank CNPJ..." );
+            log_message( "Skipped account {$account_name} ({$account_id}), because of blank CNPJ..." );
             continue;
         }
 
         $post_id = null;
 
         try {
-            $existing_post = get_single_post( [
-                'post_type' => 'organizacao',
-                'meta_query' => [
-                    [ 'key' => '_ethos_crm_account_id', 'value' => $account_id ],
-                ],
-            ] );
-
-            if ( empty( $existing_post ) ) {
-                log_message( "Creating {$account_name} ({$account_id})...");
-                \hacklabr\cache_crm_entity( $account );
-                $post_id = crm\create_from_account( $account );
-            } else {
-                log_message( "Updating {$account_name} ({$account_id})..." );
-                \hacklabr\cache_crm_entity( $account );
-                $post_id = crm\update_from_account( $account, $existing_post );
-            }
+            \hacklabr\cache_crm_entity( $account );
+            $post_id = crm\import_account( $account, $force_update );
         } catch ( \Throwable $err ) {
             log_message( $err->getMessage(), 'error' );
         }
 
-        if ( is_wp_error( $post_id ) ) {
-            log_message( "\t" . $post_id->get_error_message(), 'error' );
+        if ( empty( $post_id ) ) {
+            log_message( "\tAccount import failed for {$account_name} ({$account_id}).", 'error' );
             continue;
         }
 
-        if ( empty( $post_id ) || empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
+        if ( empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
             log_message( "\tCould not find primary contact." );
         }
 
@@ -611,7 +618,7 @@ function incremental_migration_command() {
             try {
                 \hacklabr\forget_cached_crm_entity( 'contact', $contact->Id );
                 \hacklabr\cache_crm_entity( $contact );
-                $user_id = crm\import_contact( $contact, $account, true );
+                $user_id = crm\import_contact( $contact, $account, $force_update );
 
                 if ( $user_id ) {
                     $current_count++;
@@ -633,11 +640,39 @@ function incremental_migration_command() {
 
     log_message( "Finished importing {$total_count} contacts, with {$total_errors} errors.", 'success' );
 
-    \ethos\remove_inactive_accounts( $active_account_ids );
+    $last_active = (int) get_option( '_ethos_migration_last_active_accounts', 0 );
+    $current_active = count( $active_account_ids );
+    $cleanup = [ 'status' => 'skipped' ];
+
+    if ( $current_active === 0 ) {
+        $cleanup['reason'] = 'no-active-accounts';
+        log_message( 'Cleanup skipped: no active accounts found this run (CRM connection or data problem?).', 'error' );
+    } elseif ( $last_active > 0 && $current_active < $last_active * 0.5 ) {
+        $cleanup['reason'] = 'active-accounts-dropped';
+        log_message( "Cleanup skipped: active accounts dropped from {$last_active} to {$current_active} (possible truncated CRM iteration).", 'error' );
+    } else {
+        $cleanup_result = \ethos\remove_inactive_accounts( $active_account_ids );
+        $cleanup = [
+            'status' => 'done',
+            'removed' => $cleanup_result['removed'],
+            'errors' => $cleanup_result['errors'],
+        ];
+        update_option( '_ethos_migration_last_active_accounts', $current_active );
+    }
+
+    update_option( '_ethos_migration_last_run', [
+        'started' => $run_started_datetime->format( 'Y-m-d H:i:s P' ),
+        'finished' => current_datetime()->format( 'Y-m-d H:i:s P' ),
+        'duration_s' => round( microtime( true ) - $run_started_at, 1 ),
+        'active_accounts' => $current_active,
+        'contacts' => $total_count,
+        'errors' => $total_errors,
+        'cleanup' => $cleanup,
+    ] );
 }
 
 function disable_pmpro_emails( $pre, $option ) {
-    if ( inside_wp_cli() ) {
+    if ( inside_wp_cli() || wp_doing_cron() ) {
         if ( str_starts_with( $option, 'pmpro_email_' ) && str_ends_with( $option, '_disabled' ) ) {
             return true;
         }
@@ -666,7 +701,7 @@ add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\migration\\disable
 add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\migration\\disable_wp_emails', 20, 2 );
 
 function disable_user_update_email( bool $send ): bool {
-    if (inside_wp_cli()) {
+    if ( inside_wp_cli() || wp_doing_cron() ) {
         return false;
     }
 
@@ -703,6 +738,8 @@ function log_message( string $message, string $level = 'debug' ) {
     } else {
         error_log( '[' . $level . '] ' . $message, 0 );
     }
+
+    write_migration_log_line( $message, $level );
 
     switch ( $level ) {
         case 'warning':
