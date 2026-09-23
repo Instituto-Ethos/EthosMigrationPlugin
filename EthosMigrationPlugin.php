@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Ethos Migration Plugin
  * Description:       Plugin to migrate post types, taxonomies and metadata on Ethos site.
- * Version:           0.8.1
+ * Version:           0.9.0
  * Requires at least: 5.2
  * Requires PHP:      7.4
  * Author:            Hacklab
@@ -17,8 +17,10 @@ function ethos_plugin_activate() {
 
 register_activation_hook( __FILE__, 'ethos_plugin_activate' );
 
-define( 'ETHOS_MIGRATION_VERSION', '0.8.1' );
+define( 'ETHOS_MIGRATION_VERSION', '0.9.0' );
 define( 'ETHOS_MIGRATION_PATH', plugins_url( '/', __FILE__ ) );
 
 require_once( 'includes/functions.php' );
+require_once( 'includes/cleanup.php' );
 require_once( 'includes/crm.php' );
+require_once( 'includes/incremental-cron.php' );

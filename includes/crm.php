@@ -536,8 +536,149 @@ function first_access_v3_command() {
     csv_finish();
 }
 
+/**
+ * Usage: wp incremental-migration [--force]
+ *
+ * --force ignores the _ethos_crm:modifiedon markers and re-syncs everything.
+ */
+function incremental_migration_command( array $args = [], array $assoc_args = [] ) {
+    global $ethos_crm_command, $ethos_migration_log_file;
+    $ethos_crm_command = 'incremental-migration';
+
+    $parsed_args = wp_parse_args( $assoc_args, [ 'force' => false ] );
+    $force_update = (bool) $parsed_args['force'];
+
+    if ( empty( $ethos_migration_log_file ) ) {
+        $ethos_migration_log_file = open_migration_log();
+    }
+
+    $run_started_datetime = current_datetime();
+    $run_started_at = microtime( true );
+
+    set_hacklab_as_current_user();
+
+    $accounts = \hacklabr\iterate_crm_entities( 'account', [
+        'filters' => [
+            'statecode' => 0 /* Active */,
+        ],
+        'orderby' => 'name',
+        'order' => 'ASC',
+    ] );
+
+    $active_account_ids = [];
+
+    $processed_accounts = 0;
+    $total_count = 0;
+    $total_errors = 0;
+
+    foreach ( $accounts as $account ) {
+        if ( ! crm\is_active_account( $account ) ) {
+            continue;
+        }
+
+        $processed_accounts++;
+        if ( 0 === $processed_accounts % 50 ) {
+            crm\free_runtime_memory();
+        }
+
+        $attributes = $account->Attributes;
+        $account_id = $account->Id;
+        $account_name = $attributes['name'] ?? '';
+        $cnpj = $attributes['fut_st_cnpjsemmascara'] ?? '';
+
+        $active_account_ids[] = $account_id;
+
+        if ( empty( $cnpj ) ) {
+            log_message( "Skipped account {$account_name} ({$account_id}), because of blank CNPJ..." );
+            continue;
+        }
+
+        $post_id = null;
+
+        try {
+            \hacklabr\cache_crm_entity( $account );
+            $post_id = crm\import_account( $account, $force_update );
+        } catch ( \Throwable $err ) {
+            log_message( $err->getMessage(), 'error' );
+        }
+
+        if ( empty( $post_id ) ) {
+            log_message( "\tAccount import failed for {$account_name} ({$account_id}).", 'error' );
+            continue;
+        }
+
+        if ( empty( get_post_meta( $post_id, '_pmpro_group', true ) ) ) {
+            log_message( "\tCould not find primary contact." );
+        }
+
+        $contacts = \hacklabr\iterate_crm_entities( 'contact', [
+            'filters' => [
+                'accountid' => $account_id,
+            ],
+        ] );
+
+        $current_count = 0;
+        $current_errors = 0;
+
+        foreach ( $contacts as $contact ) {
+            try {
+                \hacklabr\forget_cached_crm_entity( 'contact', $contact->Id );
+                \hacklabr\cache_crm_entity( $contact );
+                $user_id = crm\import_contact( $contact, $account, $force_update );
+
+                if ( $user_id ) {
+                    $current_count++;
+                    $total_count++;
+                }
+            } catch ( \Throwable $err ) {
+                $contact_name = $contact->Attributes['fullname'] ?? '';
+                log_message( "\tErro ao importar {$contact_name} ({$contact->Id}): {$err->getMessage()}", 'error' );
+                $current_errors++;
+                $total_errors++;
+            }
+        }
+
+        log_message( "\tImported more {$current_count} contacts (of {$total_count} total)." );
+        if ( $current_errors > 0 ) {
+            log_message( "\tFound more {$current_errors} errors (of {$total_errors} total)." );
+        }
+    }
+
+    log_message( "Finished importing {$total_count} contacts, with {$total_errors} errors.", 'success' );
+
+    $last_active = (int) get_option( '_ethos_migration_last_active_accounts', 0 );
+    $current_active = count( $active_account_ids );
+    $cleanup = [ 'status' => 'skipped' ];
+
+    if ( $current_active === 0 ) {
+        $cleanup['reason'] = 'no-active-accounts';
+        log_message( 'Cleanup skipped: no active accounts found this run (CRM connection or data problem?).', 'error' );
+    } elseif ( $last_active > 0 && $current_active < $last_active * 0.5 ) {
+        $cleanup['reason'] = 'active-accounts-dropped';
+        log_message( "Cleanup skipped: active accounts dropped from {$last_active} to {$current_active} (possible truncated CRM iteration).", 'error' );
+    } else {
+        $cleanup_result = \ethos\remove_inactive_accounts( $active_account_ids );
+        $cleanup = [
+            'status' => 'done',
+            'removed' => $cleanup_result['removed'],
+            'errors' => $cleanup_result['errors'],
+        ];
+        update_option( '_ethos_migration_last_active_accounts', $current_active );
+    }
+
+    update_option( '_ethos_migration_last_run', [
+        'started' => $run_started_datetime->format( 'Y-m-d H:i:s P' ),
+        'finished' => current_datetime()->format( 'Y-m-d H:i:s P' ),
+        'duration_s' => round( microtime( true ) - $run_started_at, 1 ),
+        'active_accounts' => $current_active,
+        'contacts' => $total_count,
+        'errors' => $total_errors,
+        'cleanup' => $cleanup,
+    ] );
+}
+
 function disable_pmpro_emails( $pre, $option ) {
-    if ( inside_wp_cli() ) {
+    if ( inside_wp_cli() || wp_doing_cron() ) {
         if ( str_starts_with( $option, 'pmpro_email_' ) && str_ends_with( $option, '_disabled' ) ) {
             return true;
         }
@@ -566,7 +707,7 @@ add_filter( 'wp_send_new_user_notification_to_admin', 'ethos\\migration\\disable
 add_filter( 'wp_send_new_user_notification_to_user', 'ethos\\migration\\disable_wp_emails', 20, 2 );
 
 function disable_user_update_email( bool $send ): bool {
-    if (inside_wp_cli()) {
+    if ( inside_wp_cli() || wp_doing_cron() ) {
         return false;
     }
 
@@ -592,6 +733,7 @@ add_action( 'init', 'ethos\\migration\\register_first_access_command' );
 function register_import_accounts_command() {
     if ( inside_wp_cli() ) {
         \WP_CLI::add_command( 'import-accounts', 'ethos\\migration\\import_accounts_command' );
+        \WP_CLI::add_command( 'incremental-migration', 'ethos\\migration\\incremental_migration_command' );
     }
 }
 add_action( 'init', 'ethos\\migration\\register_import_accounts_command' );
@@ -602,6 +744,8 @@ function log_message( string $message, string $level = 'debug' ) {
     } else {
         error_log( '[' . $level . '] ' . $message, 0 );
     }
+
+    write_migration_log_line( $message, $level );
 
     switch ( $level ) {
         case 'warning':
