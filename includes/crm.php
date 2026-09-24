@@ -621,6 +621,10 @@ function incremental_migration_command( array $args = [], array $assoc_args = []
         $current_errors = 0;
 
         foreach ( $contacts as $contact ) {
+            if ( ! crm\is_active_contact( $contact, $account ) ) {
+                continue;
+            }
+
             try {
                 \hacklabr\forget_cached_crm_entity( 'contact', $contact->Id );
                 \hacklabr\cache_crm_entity( $contact );
