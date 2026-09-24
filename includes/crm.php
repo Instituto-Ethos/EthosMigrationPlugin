@@ -588,8 +588,10 @@ function incremental_migration_command( array $args = [], array $assoc_args = []
 
         $active_account_ids[] = $account_id;
 
+        log_message( "Processing account {$account_name} ({$account_id})..." );
+
         if ( empty( $cnpj ) ) {
-            log_message( "Skipped account {$account_name} ({$account_id}), because of blank CNPJ..." );
+            log_message( "Skipped account {$account_name} ({$account_id}), because of blank CNPJ." );
             continue;
         }
 
