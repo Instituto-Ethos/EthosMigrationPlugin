@@ -5,6 +5,11 @@ namespace ethos\migration;
 use \AlexaCRM\Xrm\Entity;
 use \ethos\crm;
 
+/**
+ * Accounts fetched (and imported) per migration chunk.
+ */
+const ACCOUNTS_PER_PAGE = 100;
+
 function inside_wp_cli () {
     return class_exists( '\WP_CLI' );
 }
@@ -537,56 +542,82 @@ function first_access_v3_command() {
 }
 
 /**
- * Usage: wp incremental-migration [--force]
+ * CRM filters that define which accounts take part in a migration cycle.
  *
- * --force ignores the _ethos_crm:modifiedon markers and re-syncs everything.
+ * Prefilters on the server side what is_active_account() checks in PHP:
+ * active accounts with an association status of Associado or Grupo Econômico.
+ * Keep in sync with AccountAssociation::activeValues() (theme) and
+ * is_active_account() (importer).
  */
-function incremental_migration_command( array $args = [], array $assoc_args = [] ) {
-    global $ethos_crm_command, $ethos_migration_log_file;
-    $ethos_crm_command = 'incremental-migration';
+function cycle_account_filters(): array {
+    return [
+        'statecode' => 0,
+        'fut_pl_associacao' => \ethos\crm\AccountAssociation::activeValues(),
+    ];
+}
 
-    $parsed_args = wp_parse_args( $assoc_args, [ 'force' => false ] );
-    $force_update = (bool) $parsed_args['force'];
+/**
+ * Fingerprint of the accounts page query for a given page size.
+ *
+ * Persisted in the cycle state: when a deploy changes the query shape
+ * (filters, order, page size), the running cycle restarts from page 1
+ * instead of continuing over inconsistent offsets.
+ */
+function cycle_query_signature( int $per_page ): string {
+    return md5( serialize( [
+        'entity'   => 'account',
+        'filters'  => cycle_account_filters(),
+        'orderby'  => [ 'name', 'accountid' ],
+        'order'    => 'ASC',
+        'per_page' => $per_page,
+    ] ) );
+}
 
-    if ( empty( $ethos_migration_log_file ) ) {
-        $ethos_migration_log_file = open_migration_log();
-    }
+/**
+ * Processes a single page of accounts — and, for each imported account, all
+ * of its active contacts.
+ *
+ * @param array $state Current cycle state.
+ *
+ * @return array|null The next cycle state (page advanced, counters merged,
+ *                    transient 'finished' key telling whether the cycle is
+ *                    complete), or null when the CRM page could not be fetched.
+ */
+function process_accounts_page( array $state ): array|null {
+    $page         = (int) $state['page'];
+    $per_page     = (int) $state['per_page'];
+    $force_update = ! empty( $state['force'] );
 
-    $run_started_datetime = current_datetime();
-    $run_started_at = microtime( true );
-
-    set_hacklab_as_current_user();
-
-    $accounts = \hacklabr\iterate_crm_entities( 'account', [
-        'filters' => [
-            'statecode' => 0 /* Active */,
-        ],
-        'orderby' => 'name',
-        'order' => 'ASC',
+    $result = \hacklabr\get_crm_entities_page( 'account', [
+        'page'     => $page,
+        'per_page' => $per_page,
+        'orderby'  => 'name',
+        'order'    => 'ASC',
+        'filters'  => cycle_account_filters(),
     ] );
 
-    $active_account_ids = [];
+    if ( $result === null ) {
+        return null;
+    }
 
-    $processed_accounts = 0;
-    $total_count = 0;
-    $total_errors = 0;
+    $accounts   = $result->Entities ?? [];
 
     foreach ( $accounts as $account ) {
         if ( ! crm\is_active_account( $account ) ) {
             continue;
         }
 
-        $processed_accounts++;
-        if ( 0 === $processed_accounts % 50 ) {
+        $state['processed_accounts']++;
+        if ( 0 === $state['processed_accounts'] % 50 ) {
             crm\free_runtime_memory();
         }
 
-        $attributes = $account->Attributes;
-        $account_id = $account->Id;
+        $attributes   = $account->Attributes;
+        $account_id   = $account->Id;
         $account_name = $attributes['name'] ?? '';
-        $cnpj = $attributes['fut_st_cnpjsemmascara'] ?? '';
+        $cnpj         = $attributes['fut_st_cnpjsemmascara'] ?? '';
 
-        $active_account_ids[] = $account_id;
+        $state['active_account_ids'][] = $account_id;
 
         log_message( "Processing account {$account_name} ({$account_id})..." );
 
@@ -616,11 +647,11 @@ function incremental_migration_command( array $args = [], array $assoc_args = []
         $contacts = \hacklabr\iterate_crm_entities( 'contact', [
             'filters' => [
                 'accountid' => $account_id,
-                'statecode' => 0,
+                'statecode' => 0 /* Active */,
             ],
         ] );
 
-        $current_count = 0;
+        $current_count  = 0;
         $current_errors = 0;
 
         foreach ( $contacts as $contact ) {
@@ -635,53 +666,218 @@ function incremental_migration_command( array $args = [], array $assoc_args = []
 
                 if ( $user_id ) {
                     $current_count++;
-                    $total_count++;
+                    $state['total_count']++;
                 }
             } catch ( \Throwable $err ) {
                 $contact_name = $contact->Attributes['fullname'] ?? '';
                 log_message( "\tErro ao importar {$contact_name} ({$contact->Id}): {$err->getMessage()}", 'error' );
                 $current_errors++;
-                $total_errors++;
+                $state['total_errors']++;
             }
         }
 
-        log_message( "\tImported more {$current_count} contacts (of {$total_count} total)." );
+        log_message( "\tImported {$current_count} contacts ({$state['total_count']} total so far)." );
         if ( $current_errors > 0 ) {
-            log_message( "\tFound more {$current_errors} errors (of {$total_errors} total)." );
+            log_message( "\tFound {$current_errors} errors ({$state['total_errors']} total so far)." );
         }
     }
 
-    log_message( "Finished importing {$total_count} contacts, with {$total_errors} errors.", 'success' );
+    $state['page'] = $page + 1;
+    $state['finished'] = ! $result->MoreRecords;
 
-    $last_active = (int) get_option( '_ethos_migration_last_active_accounts', 0 );
-    $current_active = count( $active_account_ids );
-    $cleanup = [ 'status' => 'skipped' ];
+    return $state;
+}
+
+/**
+ * Ends a completed cycle: runs the inactive-accounts cleanup (with the
+ * usual safety guards, computed over the whole cycle) and records the last
+ * run statistics.
+ */
+function finalize_cycle( array $state ): void {
+    $current_active = count( $state['active_account_ids'] );
+    $last_active    = (int) get_option( '_ethos_migration_last_active_accounts', 0 );
+    $cleanup        = [ 'status' => 'skipped' ];
 
     if ( $current_active === 0 ) {
         $cleanup['reason'] = 'no-active-accounts';
-        log_message( 'Cleanup skipped: no active accounts found this run (CRM connection or data problem?).', 'error' );
+        log_message( 'Cleanup skipped: no active accounts found this cycle (CRM connection or data problem?).', 'error' );
     } elseif ( $last_active > 0 && $current_active < $last_active * 0.5 ) {
         $cleanup['reason'] = 'active-accounts-dropped';
         log_message( "Cleanup skipped: active accounts dropped from {$last_active} to {$current_active} (possible truncated CRM iteration).", 'error' );
     } else {
-        $cleanup_result = \ethos\remove_inactive_accounts( $active_account_ids );
+        $cleanup_result = \ethos\remove_inactive_accounts( $state['active_account_ids'] );
         $cleanup = [
-            'status' => 'done',
+            'status'  => 'done',
             'removed' => $cleanup_result['removed'],
-            'errors' => $cleanup_result['errors'],
+            'errors'  => $cleanup_result['errors'],
         ];
         update_option( '_ethos_migration_last_active_accounts', $current_active );
     }
 
+    log_message( "Finished importing {$state['total_count']} contacts, with {$state['total_errors']} errors.", 'success' );
+
     update_option( '_ethos_migration_last_run', [
-        'started' => $run_started_datetime->format( 'Y-m-d H:i:s P' ),
-        'finished' => current_datetime()->format( 'Y-m-d H:i:s P' ),
-        'duration_s' => round( microtime( true ) - $run_started_at, 1 ),
+        'started'         => $state['started'],
+        'finished'        => current_datetime()->format( 'Y-m-d H:i:s P' ),
+        'duration_s'      => round( microtime( true ) - (float) $state['started_ts'], 1 ),
         'active_accounts' => $current_active,
-        'contacts' => $total_count,
-        'errors' => $total_errors,
-        'cleanup' => $cleanup,
+        'contacts'        => (int) $state['total_count'],
+        'errors'          => (int) $state['total_errors'],
+        'cleanup'         => $cleanup,
+        'status'          => 'completed',
+        'pages'           => max( 0, (int) $state['page'] - 1 ),
+        'per_page'        => (int) $state['per_page'],
+        'force'           => ! empty( $state['force'] ),
     ] );
+
+    clear_cycle_state();
+}
+
+/**
+ * Discards an in-progress cycle without ever running the cleanup.
+ */
+function abort_cycle( array $state, string $reason ): void {
+    log_message( "Aborting migration cycle: {$reason}", 'error' );
+
+    update_option( '_ethos_migration_last_run', [
+        'started'         => $state['started'],
+        'finished'        => current_datetime()->format( 'Y-m-d H:i:s P' ),
+        'duration_s'      => round( microtime( true ) - (float) $state['started_ts'], 1 ),
+        'active_accounts' => count( $state['active_account_ids'] ),
+        'contacts'        => (int) $state['total_count'],
+        'errors'          => (int) $state['total_errors'],
+        'cleanup'         => [ 'status' => 'skipped', 'reason' => 'cycle-aborted' ],
+        'status'          => 'aborted',
+        'abort_reason'    => $reason,
+        'pages'           => max( 0, (int) $state['page'] - 1 ),
+        'per_page'        => (int) $state['per_page'],
+        'force'           => ! empty( $state['force'] ),
+    ] );
+
+    clear_cycle_state();
+}
+
+/**
+ * Runs a single migration chunk: fetches and imports one page of accounts,
+ * then persists the advanced cursor. Safe to call repeatedly.
+ *
+ * @return string One of 'idle' (no cycle in progress), 'running', 'finished'
+ *                or 'aborted'.
+ */
+function run_migration_chunk(): string {
+    $state = get_cycle_state();
+
+    if ( empty( $state ) ) {
+        return 'idle';
+    }
+
+    $per_page = (int) ( $state['per_page'] ?? ACCOUNTS_PER_PAGE );
+
+    if ( ( $state['query_signature'] ?? '' ) !== cycle_query_signature( $per_page ) ) {
+        log_message( 'Cycle query signature changed (deploy?); restarting the cycle from page 1.', 'warning' );
+        $state = start_cycle( ! empty( $state['force'] ), $per_page );
+    }
+
+    $new_state = process_accounts_page( $state );
+
+    if ( $new_state === null ) {
+        $failures = (int) ( $state['consecutive_failures'] ?? 0 ) + 1;
+
+        if ( $failures >= 3 ) {
+            abort_cycle( $state, "CRM page fetch failed {$failures} consecutive times" );
+            return 'aborted';
+        }
+
+        update_cycle_state( [ 'consecutive_failures' => $failures ] );
+        log_message( "[cycle page {$state['page']}] Fetch failed; will retry (attempt {$failures}/3).", 'error' );
+
+        return 'running';
+    }
+
+    $finished = ! empty( $new_state['finished'] );
+    unset( $new_state['finished'] );
+
+    $new_state['consecutive_failures'] = 0;
+    update_cycle_state( $new_state );
+
+    if ( $finished ) {
+        finalize_cycle( $new_state );
+        return 'finished';
+    }
+
+    return 'running';
+}
+
+/**
+ * Usage: wp incremental-migration [--force] [--per-page=N]
+ *
+ * Runs a whole migration cycle in a single process, chunk by chunk (one CRM
+ * page of accounts per chunk). When driven by cron, each chunk runs in its
+ * own request through the `ethos_migration\run_chunk` tick (see
+ * incremental-cron.php).
+ *
+ * --force ignores the _ethos_crm:modifiedon markers and re-syncs everything,
+ * discarding any cycle in progress.
+ * --per-page sets the accounts page size for a NEW cycle (default 100).
+ */
+function incremental_migration_command( array $args = [], array $assoc_args = [] ) {
+    global $ethos_crm_command, $ethos_migration_log_file;
+    $ethos_crm_command = 'incremental-migration';
+
+    $parsed_args = wp_parse_args( $assoc_args, [
+        'force'    => false,
+        'per-page' => ACCOUNTS_PER_PAGE,
+    ] );
+
+    $force_update = (bool) $parsed_args['force'];
+    $per_page     = max( 1, (int) $parsed_args['per-page'] );
+
+    if ( empty( $ethos_migration_log_file ) ) {
+        $ethos_migration_log_file = open_migration_log();
+    }
+
+    if ( ! acquire_lock() ) {
+        cli_log( 'Another migration chunk is currently running (cron tick or another CLI run). Try again in a few minutes.', 'error' );
+        return;
+    }
+
+    try {
+        set_hacklab_as_current_user();
+
+        $state = get_cycle_state();
+
+        if ( empty( $state ) ) {
+            $state = start_cycle( $force_update, $per_page );
+            log_message( "Started a new migration cycle" . ( $force_update ? ' with --force' : '' ) . " ({$per_page} accounts per page)." );
+        } elseif ( $force_update ) {
+            log_message( "Discarding the in-progress cycle (was at page {$state['page']}) to start a forced one.", 'warning' );
+            $state = start_cycle( true, $per_page );
+        } else {
+            log_message( "Resuming the existing cycle from page {$state['page']}." );
+        }
+
+        while ( true ) {
+            refresh_lock();
+
+            $result = run_migration_chunk();
+
+            if ( $result === 'finished' ) {
+                cli_log( 'Migration cycle finished.', 'success' );
+                break;
+            }
+
+            if ( $result === 'aborted' ) {
+                cli_log( 'Migration cycle aborted; see the migration log for details.', 'error' );
+                break;
+            }
+
+            if ( $result === 'idle' ) {
+                break;
+            }
+        }
+    } finally {
+        release_lock();
+    }
 }
 
 function disable_pmpro_emails( $pre, $option ) {
