@@ -616,6 +616,7 @@ function incremental_migration_command( array $args = [], array $assoc_args = []
         $contacts = \hacklabr\iterate_crm_entities( 'contact', [
             'filters' => [
                 'accountid' => $account_id,
+                'statecode' => 0,
             ],
         ] );
 
