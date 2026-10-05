@@ -83,26 +83,57 @@ function write_migration_log_line( string $message, string $level ): void {
  * takes over from the persisted cursor.
  */
 function acquire_lock(): bool {
-    if ( ! empty( get_transient( 'ethos_migration_lock' ) ) ) {
+    if ( ! empty( get_transient( 'ethos_migration_chunk_lock' ) ) ) {
         return false;
     }
 
-    set_transient( 'ethos_migration_lock', 1, 3 * TICK_INTERVAL );
+    set_transient( 'ethos_migration_chunk_lock', 1, 3 * TICK_INTERVAL );
     return true;
 }
 
 /**
  * Extends the chunk lock TTL, keeping it alive across the chunks of a
  * long-running CLI cycle.
+ *
+ * Re-asserts the lock unconditionally: a conditional refresh would let the
+ * lock lapse if a single chunk ever outlives the TTL, allowing a cron tick
+ * to process a chunk concurrently with this run.
  */
 function refresh_lock(): void {
-    if ( ! empty( get_transient( 'ethos_migration_lock' ) ) ) {
-        set_transient( 'ethos_migration_lock', 1, 3 * TICK_INTERVAL );
+    set_transient( 'ethos_migration_chunk_lock', 1, 3 * TICK_INTERVAL );
+}
+
+/**
+ * Acquires the chunk lock, waiting for an in-flight chunk (or CLI run) to
+ * finish. CLI-only: cron ticks must never block and keep using
+ * acquire_lock() instead.
+ *
+ * @param int $retry_every Seconds between attempts.
+ * @param int $max_wait    Maximum seconds to wait before giving up.
+ *
+ * @return bool True when the lock was acquired, false on timeout.
+ */
+function acquire_lock_with_wait( int $retry_every = 30, int $max_wait = 3 * TICK_INTERVAL ): bool {
+    $attempts = max( 1, intdiv( $max_wait, $retry_every ) );
+
+    for ( $attempt = 1; $attempt <= $attempts; $attempt++ ) {
+        if ( acquire_lock() ) {
+            return true;
+        }
+
+        if ( $attempt === $attempts ) {
+            break;
+        }
+
+        log_message( "Migration lock held by a cron tick or another CLI run; waiting (attempt {$attempt}/{$attempts})...", 'warning' );
+        sleep( $retry_every );
     }
+
+    return false;
 }
 
 function release_lock(): void {
-    delete_transient( 'ethos_migration_lock' );
+    delete_transient( 'ethos_migration_chunk_lock' );
 }
 
 function get_cycle_state(): array|null {

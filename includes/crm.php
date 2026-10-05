@@ -819,6 +819,9 @@ function run_migration_chunk(): string {
  * --force ignores the _ethos_crm:modifiedon markers and re-syncs everything,
  * discarding any cycle in progress.
  * --per-page sets the accounts page size for a NEW cycle (default 100).
+ *
+ * Waits up to 15 minutes for the chunk lock (a running cron tick or CLI run)
+ * before aborting.
  */
 function incremental_migration_command( array $args = [], array $assoc_args = [] ) {
     global $ethos_crm_command, $ethos_migration_log_file;
@@ -836,8 +839,8 @@ function incremental_migration_command( array $args = [], array $assoc_args = []
         $ethos_migration_log_file = open_migration_log();
     }
 
-    if ( ! acquire_lock() ) {
-        cli_log( 'Another migration chunk is currently running (cron tick or another CLI run). Try again in a few minutes.', 'error' );
+    if ( ! acquire_lock_with_wait() ) {
+        log_message( 'Could not acquire the migration lock after waiting 15 minutes (a cron tick or another CLI run holds it). Aborting.', 'error' );
         return;
     }
 
