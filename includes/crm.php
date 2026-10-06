@@ -600,6 +600,8 @@ function process_accounts_page( array $state ): array|null {
         return null;
     }
 
+    log_message( "Running page $page." );
+
     $accounts   = $result->Entities ?? [];
 
     foreach ( $accounts as $account ) {
