@@ -165,7 +165,7 @@ function start_cycle( bool $force ): array {
         'force'                => $force,
         'started'              => current_datetime()->format( 'Y-m-d H:i:s P' ),
         'started_ts'           => microtime( true ),
-        'query_signature'      => cycle_query_signature( $per_page ),
+        'query_signature'      => cycle_query_signature( ACCOUNTS_PER_PAGE ),
         'active_account_ids'   => [],
         'processed_accounts'   => 0,
         'total_count'          => 0,
