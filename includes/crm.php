@@ -8,7 +8,7 @@ use \ethos\crm;
 /**
  * Accounts fetched (and imported) per migration chunk.
  */
-const ACCOUNTS_PER_PAGE = 100;
+const ACCOUNTS_PER_PAGE = 20;
 
 function inside_wp_cli () {
     return class_exists( '\WP_CLI' );
@@ -775,9 +775,17 @@ function run_migration_chunk(): string {
 
     $per_page = (int) ( $state['per_page'] ?? ACCOUNTS_PER_PAGE );
 
-    if ( ( $state['query_signature'] ?? '' ) !== cycle_query_signature( $per_page ) ) {
-        log_message( 'Cycle query signature changed (deploy?); restarting the cycle from page 1.', 'warning' );
-        $state = start_cycle( ! empty( $state['force'] ), $per_page );
+    /*
+     * ACCOUNTS_PER_PAGE is the single source of truth for the page size:
+     * when a deploy changes the constant, the persisted page offsets no
+     * longer match the new page size, so the cycle restarts from page 1.
+     */
+    $restart = ( $state['query_signature'] ?? '' ) !== cycle_query_signature( $per_page )
+        || $per_page !== ACCOUNTS_PER_PAGE;
+
+    if ( $restart ) {
+        log_message( 'Cycle query signature or page size changed (deploy?); restarting the cycle from page 1.', 'warning' );
+        $state = start_cycle( ! empty( $state['force'] ) );
     }
 
     $new_state = process_accounts_page( $state );
@@ -811,7 +819,7 @@ function run_migration_chunk(): string {
 }
 
 /**
- * Usage: wp incremental-migration [--force] [--per-page=N]
+ * Usage: wp incremental-migration [--force]
  *
  * Runs a whole migration cycle in a single process, chunk by chunk (one CRM
  * page of accounts per chunk). When driven by cron, each chunk runs in its
@@ -820,7 +828,6 @@ function run_migration_chunk(): string {
  *
  * --force ignores the _ethos_crm:modifiedon markers and re-syncs everything,
  * discarding any cycle in progress.
- * --per-page sets the accounts page size for a NEW cycle (default 100).
  *
  * Waits up to 15 minutes for the chunk lock (a running cron tick or CLI run)
  * before aborting.
@@ -830,12 +837,10 @@ function incremental_migration_command( array $args = [], array $assoc_args = []
     $ethos_crm_command = 'incremental-migration';
 
     $parsed_args = wp_parse_args( $assoc_args, [
-        'force'    => false,
-        'per-page' => ACCOUNTS_PER_PAGE,
+        'force' => false,
     ] );
 
     $force_update = (bool) $parsed_args['force'];
-    $per_page     = max( 1, (int) $parsed_args['per-page'] );
 
     if ( empty( $ethos_migration_log_file ) ) {
         $ethos_migration_log_file = open_migration_log();
@@ -852,11 +857,11 @@ function incremental_migration_command( array $args = [], array $assoc_args = []
         $state = get_cycle_state();
 
         if ( empty( $state ) ) {
-            $state = start_cycle( $force_update, $per_page );
-            log_message( "Started a new migration cycle" . ( $force_update ? ' with --force' : '' ) . " ({$per_page} accounts per page)." );
+            $state = start_cycle( $force_update );
+            log_message( "Started a new migration cycle" . ( $force_update ? ' with --force' : '' ) . " (" . ACCOUNTS_PER_PAGE . " accounts per page)." );
         } elseif ( $force_update ) {
             log_message( "Discarding the in-progress cycle (was at page {$state['page']}) to start a forced one.", 'warning' );
-            $state = start_cycle( true, $per_page );
+            $state = start_cycle( true );
         } else {
             log_message( "Resuming the existing cycle from page {$state['page']}." );
         }

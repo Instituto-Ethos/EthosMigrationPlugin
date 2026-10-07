@@ -157,13 +157,11 @@ function clear_cycle_state(): void {
     delete_option( '_ethos_migration_cycle' );
 }
 
-function start_cycle( bool $force, int $per_page = ACCOUNTS_PER_PAGE ): array {
-    $per_page = max( 1, $per_page );
-
+function start_cycle( bool $force ): array {
     $state = [
         'phase'                => 'accounts',
         'page'                 => 1,
-        'per_page'             => $per_page,
+        'per_page'             => ACCOUNTS_PER_PAGE,
         'force'                => $force,
         'started'              => current_datetime()->format( 'Y-m-d H:i:s P' ),
         'started_ts'           => microtime( true ),
