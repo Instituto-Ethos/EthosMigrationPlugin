@@ -732,6 +732,10 @@ function finalize_cycle( array $state ): void {
         'force'           => ! empty( $state['force'] ),
     ] );
 
+    // Weekly maintenance: deduplicate organizations sharing a CRM account ID
+    // once a week, after a fresh full cycle.
+    maybe_schedule_weekly_deduplication();
+
     clear_cycle_state();
 }
 
