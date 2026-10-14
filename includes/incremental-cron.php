@@ -158,21 +158,28 @@ function clear_cycle_state(): void {
 }
 
 /**
- * Weekly organization deduplication (Friday→Saturday window).
+ * Weekly organization deduplication (Thursday→Saturday window).
  *
  * Runs when a migration cycle finalizes: if the cycle completes on a
- * weekend (Saturday/Sunday) and the last deduplication ran more than 6
+ * Thursday or Saturday and the last deduplication ran more than 6
  * days ago, enqueues the theme's `deduplicate_organizations` job, which
  * the 5-minute job runner (`hacklabr\run_every_5_minutes` →
  * `ethos\crm\call_next_job()`) executes. Re-enqueueing is doubly
  * prevented: by the age guard below and by the UNIQUE KEY (job_name,
  * job_payload) on the ethos_jobs table.
  *
- * Sunday is included as a fallback so an aborted Saturday cycle (e.g.
+ * Saturday is included as a fallback so an aborted Thursday cycle (e.g.
  * repeated CRM page fetch failures) still gets deduplication that week.
+ *
+ * Guard interaction: after a Saturday run the next Thursday is only 5
+ * days away and is blocked by the 6-day guard, so in steady state the
+ * job keeps its weekly cadence on whichever day it last ran, switching
+ * to the other day only when that day's cycle aborts. If Thursday must
+ * become the operative day, lower the guard to 4 days (still blocks a
+ * Thursday→Saturday double run, allows the Saturday→Thursday switch).
  */
 function maybe_schedule_weekly_deduplication(): void {
-    if ( ! in_array( current_datetime()->format( 'N' ), [ '6', '7' ], true ) ) {
+    if ( ! in_array( current_datetime()->format( 'N' ), [ '4', '6' ], true ) ) {
         return;
     }
 
@@ -189,7 +196,7 @@ function maybe_schedule_weekly_deduplication(): void {
     }
 
     \ethos\crm\run_deduplication();
-    log_message( 'Weekly deduplication enqueued (weekend cycle finalized).', 'success' );
+    log_message( 'Weekly deduplication enqueued (Thursday/Saturday window cycle finalized).', 'success' );
 }
 
 function start_cycle( bool $force ): array {
